@@ -48,6 +48,10 @@ public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
         this.receiveQueue = recvQueue;
     }
 
+    public Executor getExecutor() {
+        return executor;
+    }
+
     @Override
     public ExecutorStats renderStats() {
         return executor.getStats().renderStats();

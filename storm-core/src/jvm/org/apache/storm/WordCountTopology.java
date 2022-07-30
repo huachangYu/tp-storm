@@ -1,5 +1,9 @@
 package org.apache.storm;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -11,37 +15,28 @@ import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-
 public class WordCountTopology {
     public static class RandomSentenceSpout extends BaseRichSpout {
-        SpoutOutputCollector _collector;
-        Random _rand;
+        SpoutOutputCollector collector;
+        Random rand;
 
         private static String[] sentences = new String[]{
-                "the cow jumped over the moon",
-                "an apple a day keeps the doctor away",
-                "four score and seven years ago",
-                "snow white and the seven dwarfs",
-                "i am at two with nature" };
+            "the cow jumped over the moon",
+            "an apple a day keeps the doctor away",
+            "four score and seven years ago",
+            "snow white and the seven dwarfs",
+            "i am at two with nature" };
 
         @Override
         public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
-            _collector = collector;
-            _rand = new Random();
+            this.collector = collector;
+            rand = new Random();
         }
 
         @Override
         public void nextTuple() {
-//            try {
-//                Thread.sleep(1);
-//            } catch (InterruptedException e) {
-//                throw new RuntimeException(e);
-//            }
-            String sentence = sentences[_rand.nextInt(sentences.length)];
-            _collector.emit(new Values(sentence));
+            String sentence = sentences[rand.nextInt(sentences.length)];
+            collector.emit(new Values(sentence));
         }
 
         @Override
@@ -73,11 +68,17 @@ public class WordCountTopology {
         public void execute(Tuple tuple, BasicOutputCollector collector) {
             String word = tuple.getString(0);
             Integer count = counts.get(word);
-            if (count == null)
+            if (count == null) {
                 count = 0;
+            }
             count++;
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             counts.put(word, count);
-            System.out.printf("word=%s, num=%d\n", word, count);
+//            System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -89,18 +90,18 @@ public class WordCountTopology {
 
     public static void main(String[] args) throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("spout", new RandomSentenceSpout(), 5);
-        builder.setBolt("split", new SplitSentence(), 8).shuffleGrouping("spout");
-        builder.setBolt("count", new WordCount(), 12).fieldsGrouping("split", new Fields("word"));
+        builder.setSpout("spout", new RandomSentenceSpout(), 4);
+        builder.setBolt("split", new SplitSentence(), 4).shuffleGrouping("spout");
+        builder.setBolt("count", new WordCount(), 2).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
-        conf.setDebug(true);
+        conf.setDebug(false);
+//        conf.setNumWorkers(2);
 
         if (args != null && args.length > 0) {
-            conf.setNumWorkers(3);
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());
         } else {
-            conf.setMaxTaskParallelism(3);
+//            conf.setMaxTaskParallelism(3);
             LocalCluster cluster = new LocalCluster();
             cluster.submitTopology("word-count", conf, builder.createTopology());
 

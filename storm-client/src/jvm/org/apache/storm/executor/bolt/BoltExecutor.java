@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import org.apache.storm.Config;
 import org.apache.storm.Constants;
@@ -25,7 +26,9 @@ import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
+import org.apache.storm.executor.BoltThreadPool;
 import org.apache.storm.executor.Executor;
+import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.generated.NodeInfo;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
 import org.apache.storm.messaging.IConnection;
@@ -34,6 +37,7 @@ import org.apache.storm.policy.IWaitStrategy;
 import org.apache.storm.policy.IWaitStrategy.WaitSituation;
 import org.apache.storm.policy.WaitStrategyPark;
 import org.apache.storm.security.auth.IAutoCredentials;
+import org.apache.storm.shade.com.google.common.collect.Lists;
 import org.apache.storm.stats.BoltExecutorStats;
 import org.apache.storm.stats.ClientStatsUtil;
 import org.apache.storm.task.IBolt;
@@ -62,6 +66,8 @@ public class BoltExecutor extends Executor {
     private final BoltExecutorStats stats;
     private BoltOutputCollectorImpl outputCollector;
 
+    private List<BoltThread> handlers;
+
     public BoltExecutor(WorkerState workerData, List<Long> executorId, Map<String, String> credentials) {
         super(workerData, executorId, credentials, ClientStatsUtil.BOLT);
         this.executeSampler = ConfigUtils.mkStatsSampler(topoConf);
@@ -76,6 +82,7 @@ public class BoltExecutor extends Executor {
         this.backPressureWaitStrategy.prepare(topoConf, WaitSituation.BACK_PRESSURE_WAIT);
         this.stats = new BoltExecutorStats(ConfigUtils.samplingRate(this.getTopoConf()),
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
+        this.handlers = new ArrayList<>();
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {
@@ -229,5 +236,21 @@ public class BoltExecutor extends Executor {
                 currentTask.getTaskMetrics().boltExecuteTuple(tuple.getSourceComponent(), tuple.getSourceStreamId(), delta);
             }
         }
+    }
+
+    public ExecutorShutdown execute(BoltThreadPool pool) throws Exception {
+        LOG.info("Loading executor tasks " + componentId + ":" + executorId);
+
+        String handlerName = componentId + "-executor" + executorId;
+        BoltThread handler =
+                Utils.asyncLoopForBolt(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, handlerName, pool);
+        handler.setReceiveQueue(receiveQueue);
+        handlers.add(handler);
+        LOG.info("Finished loading executor " + componentId + ":" + executorId);
+        return new ExecutorShutdown(this, Lists.newArrayList(handler), idToTask, receiveQueue);
+    }
+
+    public List<BoltThread> getHandlers() {
+        return handlers;
     }
 }

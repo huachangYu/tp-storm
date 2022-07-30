@@ -63,6 +63,8 @@ import java.util.Stack;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -76,6 +78,8 @@ import org.apache.storm.Config;
 import org.apache.storm.blobstore.BlobStore;
 import org.apache.storm.blobstore.ClientBlobStore;
 import org.apache.storm.blobstore.NimbusBlobStore;
+import org.apache.storm.executor.BoltThreadPool;
+import org.apache.storm.executor.bolt.BoltThread;
 import org.apache.storm.generated.AuthorizationException;
 import org.apache.storm.generated.ComponentCommon;
 import org.apache.storm.generated.ComponentObject;
@@ -385,13 +389,28 @@ public class Utils {
     public static SmartThread asyncLoop(final Callable afn, boolean isDaemon, final Thread.UncaughtExceptionHandler eh,
                                         int priority, final boolean isFactory, boolean startImmediately,
                                         String threadName) {
-        SmartThread thread = new SmartThread(new Runnable() {
+        return asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, null);
+    }
+
+    public static synchronized SmartThread asyncLoop(final Callable afn, boolean isDaemon,
+                                                     final Thread.UncaughtExceptionHandler eh,
+                                                     int priority, final boolean isFactory, boolean startImmediately,
+                                                     String threadName, BoltThreadPool boltThreadPool) {
+        final UUID uuid = UUID.randomUUID();
+        Runnable runnable = new Runnable() {
             public void run() {
                 try {
                     final Callable<Long> fn = isFactory ? (Callable<Long>) afn.call() : afn;
                     while (true) {
                         if (Thread.interrupted()) {
                             throw new InterruptedException();
+                        }
+
+                        if (boltThreadPool != null) {
+                            if (boltThreadPool.shouldWaiting(uuid)) {
+                                System.out.printf("thread [%s] waiting\n", uuid);
+                                LockSupport.park();
+                            }
                         }
                         final Long s = fn.call();
                         if (s == null) { // then stop running it
@@ -401,17 +420,25 @@ public class Utils {
                             Time.sleep(s);
                         }
                     }
+                    if (boltThreadPool != null) {
+                        boltThreadPool.removeThread(uuid);
+                    }
                 } catch (Throwable t) {
                     if (Utils.exceptionCauseIsInstanceOf(
-                        InterruptedException.class, t)) {
+                            InterruptedException.class, t)) {
                         LOG.info("Async loop interrupted!");
                         return;
                     }
                     LOG.error("Async loop died!", t);
                     throw new RuntimeException(t);
+                } finally {
+                    if (boltThreadPool != null) {
+                        boltThreadPool.removeThread(uuid);
+                    }
                 }
             }
-        });
+        };
+        SmartThread thread = boltThreadPool != null ? new BoltThread(runnable, uuid) : new SmartThread(runnable);
         if (eh != null) {
             thread.setUncaughtExceptionHandler(eh);
         } else {
@@ -456,6 +483,12 @@ public class Utils {
     public static SmartThread asyncLoop(final Callable afn) {
         return asyncLoop(afn, false, null, Thread.NORM_PRIORITY, false, true,
                          null);
+    }
+
+    public static BoltThread asyncLoopForBolt(final Callable afn, boolean isDaemon, final Thread.UncaughtExceptionHandler eh,
+                                              int priority, final boolean isFactory, boolean startImmediately,
+                                              String threadName, BoltThreadPool pool) {
+        return (BoltThread) asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, pool);
     }
 
     /**

@@ -43,10 +43,12 @@ import org.apache.storm.cluster.IStormClusterState;
 import org.apache.storm.daemon.DaemonCommon;
 import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.daemon.StormCommon;
+import org.apache.storm.executor.BoltThreadPool;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.executor.IRunningExecutor;
 import org.apache.storm.executor.LocalExecutor;
+import org.apache.storm.executor.bolt.BoltExecutor;
 import org.apache.storm.generated.Credentials;
 import org.apache.storm.generated.ExecutorInfo;
 import org.apache.storm.generated.ExecutorStats;
@@ -89,7 +91,7 @@ public class Worker implements Shutdownable, DaemonCommon {
     private final LogConfigManager logConfigManager;
     private final StormMetricRegistry metricRegistry;
     private Meter heatbeatMeter;
-
+    private BoltThreadPool boltThreadPool;
     private WorkerState workerState;
     private AtomicReference<List<IRunningExecutor>> executorsAtom;
     private Thread transferThread;
@@ -210,6 +212,7 @@ public class Worker implements Shutdownable, DaemonCommon {
     private Object loadWorker(IStateStorage stateStorage, IStormClusterState stormClusterState,
                               Map<String, String> initCreds, Credentials initialCredentials)
         throws Exception {
+        this.boltThreadPool = new BoltThreadPool(3);
         workerState =
             new WorkerState(conf, context, topologyId, assignmentId, supervisorIfaceSupplier, port, workerId,
                             topologyConf, stateStorage, stormClusterState,
@@ -269,9 +272,18 @@ public class Worker implements Shutdownable, DaemonCommon {
 
         List<IRunningExecutor> newExecutors = new ArrayList<IRunningExecutor>();
         for (Executor executor : execs) {
-            newExecutors.add(executor.execute());
+            ExecutorShutdown executorShutDown = null;
+            if (executor instanceof BoltExecutor) {
+                executorShutDown = ((BoltExecutor) executor).execute(boltThreadPool);
+                BoltExecutor boltExecutor = (BoltExecutor) executor;
+                boltThreadPool.addThreads(boltExecutor.getHandlers());
+            } else {
+                executorShutDown = executor.execute();
+            }
+            newExecutors.add(executorShutDown);
         }
         executorsAtom.set(newExecutors);
+        new Thread(this.boltThreadPool).start();
 
         // This thread will send out messages destined for remote tasks (on other workers)
         // If there are no remote outbound tasks, don't start the thread.

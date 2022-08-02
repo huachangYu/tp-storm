@@ -407,8 +407,11 @@ public class Utils {
                         }
 
                         if (boltThreadPool != null) {
+                            if (boltThreadPool.shouldOptimize()) {
+                                boltThreadPool.optimize();
+                            }
                             if (boltThreadPool.shouldWaiting(uuid)) {
-                                System.out.printf("thread [%s] waiting\n", uuid);
+                                System.out.printf("thread [%s] waiting\n", boltThreadPool.getThread(uuid).getName());
                                 LockSupport.park();
                             }
                         }

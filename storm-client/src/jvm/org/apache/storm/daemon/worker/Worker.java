@@ -283,7 +283,8 @@ public class Worker implements Shutdownable, DaemonCommon {
             newExecutors.add(executorShutDown);
         }
         executorsAtom.set(newExecutors);
-        new Thread(this.boltThreadPool).start();
+        boltThreadPool.setReady(true);
+//        new Thread(this.boltThreadPool).start();
 
         // This thread will send out messages destined for remote tasks (on other workers)
         // If there are no remote outbound tasks, don't start the thread.

@@ -1,9 +1,5 @@
 package org.apache.storm;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -14,6 +10,10 @@ import org.apache.storm.topology.base.BaseRichSpout;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
 
 public class WordCountTopology {
     public static class RandomSentenceSpout extends BaseRichSpout {
@@ -72,11 +72,6 @@ public class WordCountTopology {
                 count = 0;
             }
             count++;
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
             counts.put(word, count);
 //            System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));

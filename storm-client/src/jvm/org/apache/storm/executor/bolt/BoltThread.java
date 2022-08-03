@@ -10,9 +10,12 @@ public class BoltThread extends Utils.SmartThread {
     private JCQueue receiveQueue;
     private boolean inThreadPool = false;
 
+    private BoltThreadMonitor monitor;
+
     public BoltThread(Runnable r,  UUID uuid) {
         super(r);
         this.uuid = uuid;
+        this.monitor = new BoltThreadMonitor();
     }
 
     public void setReceiveQueue(JCQueue receiveQueue) {
@@ -27,11 +30,15 @@ public class BoltThread extends Utils.SmartThread {
         return inThreadPool;
     }
 
-    public int getWeight() {
-        return receiveQueue.size();
+    public double getWeight() {
+        return (monitor.getAvgTime() + 1) * (double) receiveQueue.size() ;
     }
 
     public UUID getUuid() {
         return uuid;
+    }
+
+    public BoltThreadMonitor getMonitor() {
+        return monitor;
     }
 }

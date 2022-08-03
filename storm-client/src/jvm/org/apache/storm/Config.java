@@ -197,6 +197,19 @@ public class Config extends HashMap<String, Object> {
     @IsInteger
     @IsPositiveNumber
     public static final String TOPOLOGY_WORKERS = "topology.workers";
+
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS = "topology.optimize.threadpool.time.interval.ms";
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM = "topology.bolt.threadpool.core.num";
+
+    @IsBoolean
+    public static final String TOPOLOGY_USE_BOLT_THREAD_POOL = "topology.bolt.threadpool.on";
+
     /**
      * How many instances to create for a spout/bolt. A task runs on a thread with zero or more other tasks for the same spout/bolt. The
      * number of tasks for a spout/bolt is always the same throughout the lifetime of a topology, but the number of executors (threads) for
@@ -1851,6 +1864,18 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
+    public static void setOptimizeThreadPoolTimeIntervalMs(Map<String, Object> conf, int timeInterval) {
+        conf.put(Config.TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS, timeInterval);
+    }
+
+    public static void setBoltThreadPoolCoreNum(Map<String, Object> conf, int coreNum) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, coreNum);
+    }
+
+    public static void setTopologyUseBoltThreadPool(Map<String, Object> conf, boolean isOn) {
+        conf.put(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, isOn);
+    }
+
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
         conf.put(Config.TOPOLOGY_ACKER_EXECUTORS, numExecutors);
     }
@@ -1986,6 +2011,18 @@ public class Config extends HashMap<String, Object> {
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")
     public void setNumWorkers(int workers) {
         setNumWorkers(this, workers);
+    }
+
+    public void setOptimizeThreadPoolTimeIntervalMs(int timeIntervalMs) {
+        setOptimizeThreadPoolTimeIntervalMs(this, timeIntervalMs);
+    }
+
+    public void setBoltThreadPoolCoreNum(int coreNum) {
+        setBoltThreadPoolCoreNum(this, coreNum);
+    }
+
+    public void useBoltThreadPool(boolean isOn) {
+        setTopologyUseBoltThreadPool(this, isOn);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

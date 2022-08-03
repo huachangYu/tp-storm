@@ -18,6 +18,47 @@
 
 package org.apache.storm.utils;
 
+import org.apache.storm.Config;
+import org.apache.storm.blobstore.BlobStore;
+import org.apache.storm.blobstore.ClientBlobStore;
+import org.apache.storm.blobstore.NimbusBlobStore;
+import org.apache.storm.executor.BoltThreadPool;
+import org.apache.storm.executor.bolt.BoltThread;
+import org.apache.storm.generated.AuthorizationException;
+import org.apache.storm.generated.ComponentCommon;
+import org.apache.storm.generated.ComponentObject;
+import org.apache.storm.generated.GlobalStreamId;
+import org.apache.storm.generated.InvalidTopologyException;
+import org.apache.storm.generated.KeyNotFoundException;
+import org.apache.storm.generated.Nimbus;
+import org.apache.storm.generated.NotAliveException;
+import org.apache.storm.generated.StormTopology;
+import org.apache.storm.generated.TopologyInfo;
+import org.apache.storm.generated.TopologySummary;
+import org.apache.storm.security.auth.ReqContext;
+import org.apache.storm.serialization.SerializationDelegate;
+import org.apache.storm.shade.com.google.common.annotations.VisibleForTesting;
+import org.apache.storm.shade.com.google.common.collect.Lists;
+import org.apache.storm.shade.com.google.common.collect.MapDifference;
+import org.apache.storm.shade.com.google.common.collect.Maps;
+import org.apache.storm.shade.org.apache.commons.io.FileUtils;
+import org.apache.storm.shade.org.apache.commons.io.input.ClassLoaderObjectInputStream;
+import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
+import org.apache.storm.shade.org.apache.zookeeper.ZooDefs;
+import org.apache.storm.shade.org.apache.zookeeper.data.ACL;
+import org.apache.storm.shade.org.apache.zookeeper.data.Id;
+import org.apache.storm.shade.org.json.simple.JSONValue;
+import org.apache.storm.shade.org.json.simple.parser.ParseException;
+import org.apache.storm.shade.org.yaml.snakeyaml.Yaml;
+import org.apache.storm.shade.org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.apache.storm.thrift.TBase;
+import org.apache.storm.thrift.TDeserializer;
+import org.apache.storm.thrift.TException;
+import org.apache.storm.thrift.TSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -64,7 +105,6 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,46 +113,6 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import javax.security.auth.Subject;
-import org.apache.storm.Config;
-import org.apache.storm.blobstore.BlobStore;
-import org.apache.storm.blobstore.ClientBlobStore;
-import org.apache.storm.blobstore.NimbusBlobStore;
-import org.apache.storm.executor.BoltThreadPool;
-import org.apache.storm.executor.bolt.BoltThread;
-import org.apache.storm.generated.AuthorizationException;
-import org.apache.storm.generated.ComponentCommon;
-import org.apache.storm.generated.ComponentObject;
-import org.apache.storm.generated.GlobalStreamId;
-import org.apache.storm.generated.InvalidTopologyException;
-import org.apache.storm.generated.KeyNotFoundException;
-import org.apache.storm.generated.Nimbus;
-import org.apache.storm.generated.NotAliveException;
-import org.apache.storm.generated.StormTopology;
-import org.apache.storm.generated.TopologyInfo;
-import org.apache.storm.generated.TopologySummary;
-import org.apache.storm.security.auth.ReqContext;
-import org.apache.storm.serialization.SerializationDelegate;
-import org.apache.storm.shade.com.google.common.annotations.VisibleForTesting;
-import org.apache.storm.shade.com.google.common.collect.Lists;
-import org.apache.storm.shade.com.google.common.collect.MapDifference;
-import org.apache.storm.shade.com.google.common.collect.Maps;
-import org.apache.storm.shade.org.apache.commons.io.FileUtils;
-import org.apache.storm.shade.org.apache.commons.io.input.ClassLoaderObjectInputStream;
-import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
-import org.apache.storm.shade.org.apache.zookeeper.ZooDefs;
-import org.apache.storm.shade.org.apache.zookeeper.data.ACL;
-import org.apache.storm.shade.org.apache.zookeeper.data.Id;
-import org.apache.storm.shade.org.json.simple.JSONValue;
-import org.apache.storm.shade.org.json.simple.parser.ParseException;
-import org.apache.storm.shade.org.yaml.snakeyaml.Yaml;
-import org.apache.storm.shade.org.yaml.snakeyaml.constructor.SafeConstructor;
-import org.apache.storm.thrift.TBase;
-import org.apache.storm.thrift.TDeserializer;
-import org.apache.storm.thrift.TException;
-import org.apache.storm.thrift.TSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class Utils {
     public static final Logger LOG = LoggerFactory.getLogger(Utils.class);
@@ -490,8 +490,8 @@ public class Utils {
 
     public static BoltThread asyncLoopForBolt(final Callable afn, boolean isDaemon, final Thread.UncaughtExceptionHandler eh,
                                               int priority, final boolean isFactory, boolean startImmediately,
-                                              String threadName, BoltThreadPool pool) {
-        return (BoltThread) asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, pool);
+                                              String threadName, BoltThreadPool threadPool) {
+        return (BoltThread) asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, threadPool);
     }
 
     /**

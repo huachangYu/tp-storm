@@ -212,13 +212,20 @@ public class Worker implements Shutdownable, DaemonCommon {
     private Object loadWorker(IStateStorage stateStorage, IStormClusterState stormClusterState,
                               Map<String, String> initCreds, Credentials initialCredentials)
         throws Exception {
-        this.boltThreadPool = new BoltThreadPool(3);
         workerState =
             new WorkerState(conf, context, topologyId, assignmentId, supervisorIfaceSupplier, port, workerId,
                             topologyConf, stateStorage, stormClusterState,
                             autoCreds, metricRegistry, initialCredentials);
         this.heatbeatMeter = metricRegistry.meter("doHeartbeat-calls", workerState.getWorkerTopologyContext(),
                 Constants.SYSTEM_COMPONENT_ID, (int) Constants.SYSTEM_TASK_ID);
+
+        Map<String, Object> topologyConf = workerState.getTopologyConf();
+        boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
+        if (useThreadPool) {
+            Long coreNum = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, 16);
+            Long optimizeTimeInterval = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS, 10);
+            this.boltThreadPool = new BoltThreadPool(coreNum.intValue(), optimizeTimeInterval.intValue());
+        }
 
         // Heartbeat here so that worker process dies if this fails
         // it's important that worker heartbeat to supervisor ASAP so that supervisor knows
@@ -270,10 +277,12 @@ public class Worker implements Shutdownable, DaemonCommon {
             }
         }
 
+        boolean useBoltThread = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
+
         List<IRunningExecutor> newExecutors = new ArrayList<IRunningExecutor>();
         for (Executor executor : execs) {
             ExecutorShutdown executorShutDown = null;
-            if (executor instanceof BoltExecutor) {
+            if (useBoltThread && executor instanceof BoltExecutor) {
                 executorShutDown = ((BoltExecutor) executor).execute(boltThreadPool);
                 BoltExecutor boltExecutor = (BoltExecutor) executor;
                 boltThreadPool.addThreads(boltExecutor.getHandlers());
@@ -283,8 +292,9 @@ public class Worker implements Shutdownable, DaemonCommon {
             newExecutors.add(executorShutDown);
         }
         executorsAtom.set(newExecutors);
-        boltThreadPool.setReady(true);
-//        new Thread(this.boltThreadPool).start();
+        if (useBoltThread) {
+            boltThreadPool.setReady(true);
+        }
 
         // This thread will send out messages destined for remote tasks (on other workers)
         // If there are no remote outbound tasks, don't start the thread.

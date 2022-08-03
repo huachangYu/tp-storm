@@ -62,18 +62,19 @@ public class WordCountTopology {
     }
 
     public static class WordCount extends BaseBasicBolt {
-        Map<String, Integer> counts = new HashMap<String, Integer>();
+        Map<String, Long> counts = new HashMap<String, Long>();
 
+        @SuppressWarnings("checkstyle:WhitespaceAfter")
         @Override
         public void execute(Tuple tuple, BasicOutputCollector collector) {
             String word = tuple.getString(0);
-            Integer count = counts.get(word);
+            Long count = counts.get(word);
             if (count == null) {
-                count = 0;
+                count = 0L;
             }
-            count++;
+            count += 1;
             counts.put(word, count);
-//            System.out.printf("word=%s, num=%d\n", word, count);
+            System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -90,8 +91,10 @@ public class WordCountTopology {
         builder.setBolt("count", new WordCount(), 2).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
-        conf.setDebug(false);
 //        conf.setNumWorkers(2);
+//        conf.useBoltThreadPool(true);
+//        conf.setOptimizeThreadPoolTimeIntervalMs(10);
+//        conf.setBoltThreadPoolCoreNum(3);
 
         if (args != null && args.length > 0) {
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());

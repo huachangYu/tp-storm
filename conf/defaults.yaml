@@ -254,6 +254,9 @@ storm.group.mapping.service.cache.duration.secs: 120
 topology.enable.message.timeouts: true
 topology.debug: false
 topology.workers: 1
+topology.bolt.threadpool.on: false
+topology.optimize.threadpool.time.interval.ms: 10
+topology.bolt.threadpool.core.num: 16
 topology.acker.executors: null
 topology.ras.acker.executors.per.worker: 1
 topology.eventlogger.executors: 0

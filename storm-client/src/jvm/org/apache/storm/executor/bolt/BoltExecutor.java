@@ -220,6 +220,9 @@ public class BoltExecutor extends Executor {
 
             Long ms = tuple.getExecuteSampleStartTime();
             long delta = (ms != null) ? Time.deltaMs(ms) : -1;
+            if (delta >= 0 && handlers.size() == 1) {
+                handlers.get(0).getMonitor().record(delta);
+            }
             if (isDebug) {
                 LOG.info("Execute done TUPLE {} TASK: {} DELTA: {}", tuple, taskId, delta);
             }
@@ -238,12 +241,12 @@ public class BoltExecutor extends Executor {
         }
     }
 
-    public ExecutorShutdown execute(BoltThreadPool pool) throws Exception {
+    public ExecutorShutdown execute(BoltThreadPool threadPool) throws Exception {
         LOG.info("Loading executor tasks " + componentId + ":" + executorId);
 
         String handlerName = componentId + "-executor" + executorId;
         BoltThread handler =
-                Utils.asyncLoopForBolt(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, handlerName, pool);
+                Utils.asyncLoopForBolt(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, handlerName, threadPool);
         handler.setReceiveQueue(receiveQueue);
         handlers.add(handler);
         LOG.info("Finished loading executor " + componentId + ":" + executorId);

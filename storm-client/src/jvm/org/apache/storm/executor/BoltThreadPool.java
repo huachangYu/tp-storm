@@ -19,13 +19,14 @@ public class BoltThreadPool {
 
     private long lastOptimizeTime = 0;
 
-    private long optimizeTimeGap = 10;
+    private int optimizeTimeInterval = 10;
     public BoltThreadPool() {
-        this(Integer.MAX_VALUE);
+        this(Integer.MAX_VALUE, 10);
     }
 
-    public BoltThreadPool(int coreNum) {
+    public BoltThreadPool(int coreNum, int optimizeTimeInterval) {
         this.maxThreadNum = coreNum;
+        this.optimizeTimeInterval = optimizeTimeInterval;
     }
 
     public synchronized void optimize() {
@@ -33,7 +34,10 @@ public class BoltThreadPool {
             return;
         }
         Collections.shuffle(threads);
-        threads.sort((a, b) -> b.getWeight() - a.getWeight());
+        threads.sort((a, b) -> {
+            if (b.getWeight() == a.getWeight()) return 0;
+            return b.getWeight() - a.getWeight() > 0 ? 1 : -1;
+        });
         for (int i = 0; i < threads.size(); i++) {
             UUID uuid = threads.get(i).getUuid();
             if (i < maxThreadNum) {
@@ -108,7 +112,7 @@ public class BoltThreadPool {
             return true;
         }
         long currentTime = System.currentTimeMillis();
-        if (currentTime - lastOptimizeTime > optimizeTimeGap) {
+        if (currentTime - lastOptimizeTime > optimizeTimeInterval) {
             lastOptimizeTime = currentTime;
             return true;
         }

@@ -1,5 +1,9 @@
 package org.apache.storm;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -11,14 +15,13 @@ import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-
 public class WordCountTopology {
     public static class RandomSentenceSpout extends BaseRichSpout {
         SpoutOutputCollector collector;
         Random rand;
+
+        long preTime = System.currentTimeMillis();
+        int count = 0;
 
         private static String[] sentences = new String[]{
             "the cow jumped over the moon",
@@ -35,6 +38,13 @@ public class WordCountTopology {
 
         @Override
         public void nextTuple() {
+            long current = System.currentTimeMillis();
+            if (current - preTime >= 1000) {
+                System.out.printf("spout qps=%d\n", count);
+                count = 0;
+                preTime = current;
+            }
+            count++;
             String sentence = sentences[rand.nextInt(sentences.length)];
             collector.emit(new Values(sentence));
         }
@@ -74,7 +84,7 @@ public class WordCountTopology {
             }
             count += 1;
             counts.put(word, count);
-            System.out.printf("word=%s, num=%d\n", word, count);
+//            System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -86,15 +96,16 @@ public class WordCountTopology {
 
     public static void main(String[] args) throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("spout", new RandomSentenceSpout(), 4);
+        builder.setSpout("spout", new RandomSentenceSpout(), 1);
         builder.setBolt("split", new SplitSentence(), 4).shuffleGrouping("spout");
         builder.setBolt("count", new WordCount(), 2).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
+//        conf.setDebug(true);
 //        conf.setNumWorkers(2);
-//        conf.useBoltThreadPool(true);
-//        conf.setOptimizeThreadPoolTimeIntervalMs(10);
-//        conf.setBoltThreadPoolCoreNum(3);
+        conf.useBoltThreadPool(true);
+        conf.setOptimizeThreadPoolTimeIntervalMs(10);
+        conf.setBoltThreadPoolCoreNum(8);
 
         if (args != null && args.length > 0) {
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());

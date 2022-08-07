@@ -203,6 +203,9 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
             executor = new SpoutExecutor(workerState, executorId, credentials);
         } else {
             executor = new BoltExecutor(workerState, executorId, credentials);
+            if (!componentId.equals(Constants.SYSTEM_COMPONENT_ID) && !componentId.equals(Acker.ACKER_COMPONENT_ID)) {
+                ((BoltExecutor) executor).setBoltThreadPool(workerState.getBoltExecutorPool());
+            }
         }
 
         int minId = Integer.MAX_VALUE;

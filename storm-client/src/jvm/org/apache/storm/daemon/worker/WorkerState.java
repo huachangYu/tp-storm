@@ -42,6 +42,7 @@ import org.apache.storm.cluster.VersionedData;
 import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.supervisor.AdvancedFSOps;
 import org.apache.storm.daemon.worker.BackPressureTracker.BackpressureState;
+import org.apache.storm.executor.BoltExecutorPool;
 import org.apache.storm.executor.IRunningExecutor;
 import org.apache.storm.generated.Assignment;
 import org.apache.storm.generated.Credentials;
@@ -155,6 +156,8 @@ public class WorkerState {
     private final AtomicReference<Credentials> credentialsAtom;
     private final StormMetricRegistry metricRegistry;
 
+    private BoltExecutorPool boltExecutorPool;
+
     public WorkerState(Map<String, Object> conf,
             IContext mqContext,
             String topologyId,
@@ -245,6 +248,11 @@ public class WorkerState {
             return bpStatus;
         };
         this.receiver = this.mqContext.bind(topologyId, port, cb, newConnectionResponse);
+        boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
+        if (useThreadPool) {
+            Long coreNum = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, 16);
+            this.boltExecutorPool = new BoltExecutorPool(coreNum.intValue());
+        }
     }
 
     public static boolean isConnectionReady(IConnection connection) {
@@ -263,6 +271,10 @@ public class WorkerState {
             }
         }
         return maxTaskId;
+    }
+
+    public BoltExecutorPool getBoltExecutorPool() {
+        return boltExecutorPool;
     }
 
     public List<IWorkerHook> getDeserializedWorkerHooks() {

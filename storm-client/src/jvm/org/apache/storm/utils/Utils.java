@@ -18,47 +18,6 @@
 
 package org.apache.storm.utils;
 
-import org.apache.storm.Config;
-import org.apache.storm.blobstore.BlobStore;
-import org.apache.storm.blobstore.ClientBlobStore;
-import org.apache.storm.blobstore.NimbusBlobStore;
-import org.apache.storm.executor.BoltThreadPool;
-import org.apache.storm.executor.bolt.BoltThread;
-import org.apache.storm.generated.AuthorizationException;
-import org.apache.storm.generated.ComponentCommon;
-import org.apache.storm.generated.ComponentObject;
-import org.apache.storm.generated.GlobalStreamId;
-import org.apache.storm.generated.InvalidTopologyException;
-import org.apache.storm.generated.KeyNotFoundException;
-import org.apache.storm.generated.Nimbus;
-import org.apache.storm.generated.NotAliveException;
-import org.apache.storm.generated.StormTopology;
-import org.apache.storm.generated.TopologyInfo;
-import org.apache.storm.generated.TopologySummary;
-import org.apache.storm.security.auth.ReqContext;
-import org.apache.storm.serialization.SerializationDelegate;
-import org.apache.storm.shade.com.google.common.annotations.VisibleForTesting;
-import org.apache.storm.shade.com.google.common.collect.Lists;
-import org.apache.storm.shade.com.google.common.collect.MapDifference;
-import org.apache.storm.shade.com.google.common.collect.Maps;
-import org.apache.storm.shade.org.apache.commons.io.FileUtils;
-import org.apache.storm.shade.org.apache.commons.io.input.ClassLoaderObjectInputStream;
-import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
-import org.apache.storm.shade.org.apache.zookeeper.ZooDefs;
-import org.apache.storm.shade.org.apache.zookeeper.data.ACL;
-import org.apache.storm.shade.org.apache.zookeeper.data.Id;
-import org.apache.storm.shade.org.json.simple.JSONValue;
-import org.apache.storm.shade.org.json.simple.parser.ParseException;
-import org.apache.storm.shade.org.yaml.snakeyaml.Yaml;
-import org.apache.storm.shade.org.yaml.snakeyaml.constructor.SafeConstructor;
-import org.apache.storm.thrift.TBase;
-import org.apache.storm.thrift.TDeserializer;
-import org.apache.storm.thrift.TException;
-import org.apache.storm.thrift.TSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.security.auth.Subject;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -104,7 +63,6 @@ import java.util.Stack;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.locks.LockSupport;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -113,6 +71,44 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import javax.security.auth.Subject;
+import org.apache.storm.Config;
+import org.apache.storm.blobstore.BlobStore;
+import org.apache.storm.blobstore.ClientBlobStore;
+import org.apache.storm.blobstore.NimbusBlobStore;
+import org.apache.storm.generated.AuthorizationException;
+import org.apache.storm.generated.ComponentCommon;
+import org.apache.storm.generated.ComponentObject;
+import org.apache.storm.generated.GlobalStreamId;
+import org.apache.storm.generated.InvalidTopologyException;
+import org.apache.storm.generated.KeyNotFoundException;
+import org.apache.storm.generated.Nimbus;
+import org.apache.storm.generated.NotAliveException;
+import org.apache.storm.generated.StormTopology;
+import org.apache.storm.generated.TopologyInfo;
+import org.apache.storm.generated.TopologySummary;
+import org.apache.storm.security.auth.ReqContext;
+import org.apache.storm.serialization.SerializationDelegate;
+import org.apache.storm.shade.com.google.common.annotations.VisibleForTesting;
+import org.apache.storm.shade.com.google.common.collect.Lists;
+import org.apache.storm.shade.com.google.common.collect.MapDifference;
+import org.apache.storm.shade.com.google.common.collect.Maps;
+import org.apache.storm.shade.org.apache.commons.io.FileUtils;
+import org.apache.storm.shade.org.apache.commons.io.input.ClassLoaderObjectInputStream;
+import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
+import org.apache.storm.shade.org.apache.zookeeper.ZooDefs;
+import org.apache.storm.shade.org.apache.zookeeper.data.ACL;
+import org.apache.storm.shade.org.apache.zookeeper.data.Id;
+import org.apache.storm.shade.org.json.simple.JSONValue;
+import org.apache.storm.shade.org.json.simple.parser.ParseException;
+import org.apache.storm.shade.org.yaml.snakeyaml.Yaml;
+import org.apache.storm.shade.org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.apache.storm.thrift.TBase;
+import org.apache.storm.thrift.TDeserializer;
+import org.apache.storm.thrift.TException;
+import org.apache.storm.thrift.TSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Utils {
     public static final Logger LOG = LoggerFactory.getLogger(Utils.class);
@@ -216,10 +212,10 @@ public class Utils {
     }
 
     private static InputStream getConfigFileInputStream(String configFilePath)
-        throws IOException {
+            throws IOException {
         if (null == configFilePath) {
             throw new IOException(
-                "Could not find config file, name not specified");
+                    "Could not find config file, name not specified");
         }
 
         HashSet<URL> resources = new HashSet<URL>(findResources(configFilePath));
@@ -230,9 +226,9 @@ public class Utils {
             }
         } else if (resources.size() > 1) {
             throw new IOException(
-                "Found multiple " + configFilePath
-                + " resources. You're probably bundling the Storm jars with your topology jar. "
-                + resources);
+                    "Found multiple " + configFilePath
+                            + " resources. You're probably bundling the Storm jars with your topology jar. "
+                            + resources);
         } else {
             LOG.debug("Using " + configFilePath + " from resources");
             URL resource = resources.iterator().next();
@@ -257,7 +253,7 @@ public class Utils {
             throw Utils.wrapInRuntime(e);
         }
     }
-    
+
     /**
      * URL decode the given string using the UTF-8 charset. Once Storm is baselined to Java 11, we can use URLDecoder.decode(String,
      * Charset) instead, which obsoletes this method.
@@ -271,7 +267,7 @@ public class Utils {
             throw Utils.wrapInRuntime(e);
         }
     }
-    
+
     public static Map<String, Object> readCommandLineOpts() {
         Map<String, Object> ret = new HashMap<>();
         String commandOptions = System.getProperty("storm.options");
@@ -389,31 +385,13 @@ public class Utils {
     public static SmartThread asyncLoop(final Callable afn, boolean isDaemon, final Thread.UncaughtExceptionHandler eh,
                                         int priority, final boolean isFactory, boolean startImmediately,
                                         String threadName) {
-        return asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, null);
-    }
-
-    public static synchronized SmartThread asyncLoop(final Callable afn, boolean isDaemon,
-                                                     final Thread.UncaughtExceptionHandler eh,
-                                                     int priority, final boolean isFactory, boolean startImmediately,
-                                                     String threadName, BoltThreadPool boltThreadPool) {
-        final UUID uuid = UUID.randomUUID();
-        Runnable runnable = new Runnable() {
+        SmartThread thread = new SmartThread(new Runnable() {
             public void run() {
                 try {
                     final Callable<Long> fn = isFactory ? (Callable<Long>) afn.call() : afn;
                     while (true) {
                         if (Thread.interrupted()) {
                             throw new InterruptedException();
-                        }
-
-                        if (boltThreadPool != null) {
-                            if (boltThreadPool.shouldOptimize()) {
-                                boltThreadPool.optimize();
-                            }
-                            if (boltThreadPool.shouldWaiting(uuid)) {
-                                System.out.printf("thread [%s] waiting\n", boltThreadPool.getThread(uuid).getName());
-                                LockSupport.park();
-                            }
                         }
                         final Long s = fn.call();
                         if (s == null) { // then stop running it
@@ -423,9 +401,6 @@ public class Utils {
                             Time.sleep(s);
                         }
                     }
-                    if (boltThreadPool != null) {
-                        boltThreadPool.removeThread(uuid);
-                    }
                 } catch (Throwable t) {
                     if (Utils.exceptionCauseIsInstanceOf(
                             InterruptedException.class, t)) {
@@ -434,14 +409,9 @@ public class Utils {
                     }
                     LOG.error("Async loop died!", t);
                     throw new RuntimeException(t);
-                } finally {
-                    if (boltThreadPool != null) {
-                        boltThreadPool.removeThread(uuid);
-                    }
                 }
             }
-        };
-        SmartThread thread = boltThreadPool != null ? new BoltThread(runnable, uuid) : new SmartThread(runnable);
+        });
         if (eh != null) {
             thread.setUncaughtExceptionHandler(eh);
         } else {
@@ -474,7 +444,7 @@ public class Utils {
      */
     public static SmartThread asyncLoop(final Callable afn, String threadName, final Thread.UncaughtExceptionHandler eh) {
         return asyncLoop(afn, false, eh, Thread.NORM_PRIORITY, false, true,
-                         threadName);
+                threadName);
     }
 
     /**
@@ -485,13 +455,7 @@ public class Utils {
      */
     public static SmartThread asyncLoop(final Callable afn) {
         return asyncLoop(afn, false, null, Thread.NORM_PRIORITY, false, true,
-                         null);
-    }
-
-    public static BoltThread asyncLoopForBolt(final Callable afn, boolean isDaemon, final Thread.UncaughtExceptionHandler eh,
-                                              int priority, final boolean isFactory, boolean startImmediately,
-                                              String threadName, BoltThreadPool threadPool) {
-        return (BoltThread) asyncLoop(afn, isDaemon, eh, priority, isFactory, startImmediately,  threadName, threadPool);
+                null);
     }
 
     /**
@@ -772,7 +736,7 @@ public class Utils {
             throw new RuntimeException(e);
         }
     }
-    
+
     public static void sleep(long millis) {
         try {
             Time.sleep(millis);
@@ -1189,7 +1153,7 @@ public class Utils {
         Map<String, Object> origTopoConf = normalizeConf(topoConfIn);
         try {
             Map<String, Object> deserTopoConf = normalizeConf(
-                (Map<String, Object>) JSONValue.parseWithException(JSONValue.toJSONString(topoConfIn)));
+                    (Map<String, Object>) JSONValue.parseWithException(JSONValue.toJSONString(topoConfIn)));
             return isValidConf(origTopoConf, deserTopoConf);
         } catch (ParseException e) {
             LOG.error("Json serialized config could not be deserialized", e);
@@ -1205,21 +1169,21 @@ public class Utils {
         }
         for (Map.Entry<String, Object> entryOnLeft : diff.entriesOnlyOnLeft().entrySet()) {
             LOG.warn("Config property ({}) is found in original config, but missing from the "
-                     + "serialized-deserialized config. This is due to an internal error in "
-                     + "serialization. Name: {} - Value: {}",
-                     entryOnLeft.getKey(), entryOnLeft.getKey(), entryOnLeft.getValue());
+                            + "serialized-deserialized config. This is due to an internal error in "
+                            + "serialization. Name: {} - Value: {}",
+                    entryOnLeft.getKey(), entryOnLeft.getKey(), entryOnLeft.getValue());
         }
         for (Map.Entry<String, Object> entryOnRight : diff.entriesOnlyOnRight().entrySet()) {
             LOG.warn("Config property ({}) is not found in original config, but present in "
-                     + "serialized-deserialized config. This is due to an internal error in "
-                     + "serialization. Name: {} - Value: {}",
-                     entryOnRight.getKey(), entryOnRight.getKey(), entryOnRight.getValue());
+                            + "serialized-deserialized config. This is due to an internal error in "
+                            + "serialization. Name: {} - Value: {}",
+                    entryOnRight.getKey(), entryOnRight.getKey(), entryOnRight.getValue());
         }
         for (Map.Entry<String, MapDifference.ValueDifference<Object>> entryDiffers : diff.entriesDiffering().entrySet()) {
             Object leftValue = entryDiffers.getValue().leftValue();
             Object rightValue = entryDiffers.getValue().rightValue();
             LOG.warn("Config value differs after json serialization. Name: {} - Original Value: {} - DeSer. Value: {}",
-                     entryDiffers.getKey(), leftValue, rightValue);
+                    entryDiffers.getKey(), leftValue, rightValue);
         }
         return false;
     }
@@ -1267,7 +1231,7 @@ public class Utils {
      * @param client   The NimbusBlobStore client. It must call prepare() before being used here.
      */
     public static void validateTopologyBlobStoreMap(Map<String, Object> topoConf, NimbusBlobStore client)
-        throws InvalidTopologyException, AuthorizationException {
+            throws InvalidTopologyException, AuthorizationException {
         Map<String, Map<String, Object>> blobStoreMap = (Map<String, Map<String, Object>>) topoConf.get(Config.TOPOLOGY_BLOBSTORE_MAP);
         if (blobStoreMap != null) {
             for (String key : blobStoreMap.keySet()) {
@@ -1296,7 +1260,7 @@ public class Utils {
      * Validate topology blobstore map.
      */
     public static void validateTopologyBlobStoreMap(Map<String, Object> topoConf, BlobStore blobStore)
-        throws InvalidTopologyException, AuthorizationException {
+            throws InvalidTopologyException, AuthorizationException {
         Map<String, Object> blobStoreMap = (Map<String, Object>) topoConf.get(Config.TOPOLOGY_BLOBSTORE_MAP);
         if (blobStoreMap != null) {
             Subject subject = ReqContext.context().subject();
@@ -1377,9 +1341,9 @@ public class Utils {
      */
     public static boolean isZkAuthenticationConfiguredStormServer(Map<String, Object> conf) {
         return null != System.getProperty("java.security.auth.login.config")
-               || (conf != null
-                   && conf.get(Config.STORM_ZOOKEEPER_AUTH_SCHEME) != null
-                   && !((String) conf.get(Config.STORM_ZOOKEEPER_AUTH_SCHEME)).isEmpty());
+                || (conf != null
+                && conf.get(Config.STORM_ZOOKEEPER_AUTH_SCHEME) != null
+                && !((String) conf.get(Config.STORM_ZOOKEEPER_AUTH_SCHEME)).isEmpty());
     }
 
     public static byte[] toCompressedJsonConf(Map<String, Object> topoConf) {
@@ -1560,8 +1524,8 @@ public class Utils {
     public static StormTopology addVersions(StormTopology topology) {
         String stormVersion = VersionInfo.getVersion();
         if (stormVersion != null
-            && !"Unknown".equalsIgnoreCase(stormVersion)
-            && !topology.is_set_storm_version()) {
+                && !"Unknown".equalsIgnoreCase(stormVersion)
+                && !topology.is_set_storm_version()) {
             topology.set_storm_version(stormVersion);
         }
 
@@ -1583,7 +1547,7 @@ public class Utils {
                                                                                            List<String> currentClassPath) {
         TreeMap<SimpleVersion, List<String>> ret = new TreeMap<>();
         Map<String, String> fromConf =
-            (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_CLASSPATH_MAP, Collections.emptyMap());
+                (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_CLASSPATH_MAP, Collections.emptyMap());
         for (Map.Entry<String, String> entry : fromConf.entrySet()) {
             ret.put(new SimpleVersion(entry.getKey()), Arrays.asList(entry.getValue().split(File.pathSeparator)));
         }
@@ -1599,7 +1563,7 @@ public class Utils {
     public static NavigableMap<String, IVersionInfo> getAlternativeVersionsMap(Map<String, Object> conf) {
         TreeMap<String, IVersionInfo> ret = new TreeMap<>();
         Map<String, String> fromConf =
-            (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_CLASSPATH_MAP, Collections.emptyMap());
+                (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_CLASSPATH_MAP, Collections.emptyMap());
         for (Map.Entry<String, String> entry : fromConf.entrySet()) {
             IVersionInfo version = VersionInfo.getFromClasspath(entry.getValue());
             if (version != null) {
@@ -1661,7 +1625,7 @@ public class Utils {
     public static NavigableMap<SimpleVersion, String> getConfiguredWorkerMainVersions(Map<String, Object> conf) {
         TreeMap<SimpleVersion, String> ret = new TreeMap<>();
         Map<String, String> fromConf =
-            (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_MAIN_MAP, Collections.emptyMap());
+                (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_MAIN_MAP, Collections.emptyMap());
         for (Map.Entry<String, String> entry : fromConf.entrySet()) {
             ret.put(new SimpleVersion(entry.getKey()), entry.getValue());
         }
@@ -1679,7 +1643,7 @@ public class Utils {
     public static NavigableMap<SimpleVersion, String> getConfiguredWorkerLogWriterVersions(Map<String, Object> conf) {
         TreeMap<SimpleVersion, String> ret = new TreeMap<>();
         Map<String, String> fromConf =
-            (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_LOGWRITER_MAP, Collections.emptyMap());
+                (Map<String, String>) conf.getOrDefault(Config.SUPERVISOR_WORKER_VERSION_LOGWRITER_MAP, Collections.emptyMap());
         for (Map.Entry<String, String> entry : fromConf.entrySet()) {
             ret.put(new SimpleVersion(entry.getKey()), entry.getValue());
         }
@@ -1853,7 +1817,7 @@ public class Utils {
     public static boolean isValidKey(String key) {
         if (StringUtils.isEmpty(key) || "..".equals(key) || ".".equals(key) || !BLOB_KEY_PATTERN.matcher(key).matches()) {
             LOG.error("'{}' does not appear to be valid. It must match {}. And it can't be \".\", \"..\", null or empty string.", key,
-                BLOB_KEY_PATTERN);
+                    BLOB_KEY_PATTERN);
             return false;
         }
         return true;

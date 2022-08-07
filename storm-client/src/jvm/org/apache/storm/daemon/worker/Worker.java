@@ -40,10 +40,10 @@ import org.apache.storm.cluster.ClusterUtils;
 import org.apache.storm.cluster.DaemonType;
 import org.apache.storm.cluster.IStateStorage;
 import org.apache.storm.cluster.IStormClusterState;
+import org.apache.storm.daemon.Acker;
 import org.apache.storm.daemon.DaemonCommon;
 import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.daemon.StormCommon;
-import org.apache.storm.executor.BoltThreadPool;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.executor.IRunningExecutor;
@@ -91,7 +91,6 @@ public class Worker implements Shutdownable, DaemonCommon {
     private final LogConfigManager logConfigManager;
     private final StormMetricRegistry metricRegistry;
     private Meter heatbeatMeter;
-    private BoltThreadPool boltThreadPool;
     private WorkerState workerState;
     private AtomicReference<List<IRunningExecutor>> executorsAtom;
     private Thread transferThread;
@@ -219,14 +218,6 @@ public class Worker implements Shutdownable, DaemonCommon {
         this.heatbeatMeter = metricRegistry.meter("doHeartbeat-calls", workerState.getWorkerTopologyContext(),
                 Constants.SYSTEM_COMPONENT_ID, (int) Constants.SYSTEM_TASK_ID);
 
-        Map<String, Object> topologyConf = workerState.getTopologyConf();
-        boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
-        if (useThreadPool) {
-            Long coreNum = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, 16);
-            Long optimizeTimeInterval = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS, 10);
-            this.boltThreadPool = new BoltThreadPool(coreNum.intValue(), optimizeTimeInterval.intValue());
-        }
-
         // Heartbeat here so that worker process dies if this fails
         // it's important that worker heartbeat to supervisor ASAP so that supervisor knows
         // that worker is running and moves on
@@ -281,20 +272,9 @@ public class Worker implements Shutdownable, DaemonCommon {
 
         List<IRunningExecutor> newExecutors = new ArrayList<IRunningExecutor>();
         for (Executor executor : execs) {
-            ExecutorShutdown executorShutDown = null;
-            if (useBoltThread && executor instanceof BoltExecutor) {
-                executorShutDown = ((BoltExecutor) executor).execute(boltThreadPool);
-                BoltExecutor boltExecutor = (BoltExecutor) executor;
-                boltThreadPool.addThreads(boltExecutor.getHandlers());
-            } else {
-                executorShutDown = executor.execute();
-            }
-            newExecutors.add(executorShutDown);
+            newExecutors.add(executor.execute());
         }
         executorsAtom.set(newExecutors);
-        if (useBoltThread) {
-            boltThreadPool.setReady(true);
-        }
 
         // This thread will send out messages destined for remote tasks (on other workers)
         // If there are no remote outbound tasks, don't start the thread.
@@ -561,6 +541,9 @@ public class Worker implements Shutdownable, DaemonCommon {
                 workerState.resetLogLevelsTimer.close();
                 workerState.flushTupleTimer.close();
                 workerState.backPressureCheckTimer.close();
+                if (workerState.getBoltExecutorPool() != null) {
+                    workerState.getBoltExecutorPool().shutdown();
+                }
 
                 // this is fine because the only time this is shared is when it's a local context,
                 // in which case it's a noop

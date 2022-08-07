@@ -105,7 +105,7 @@ public class WordCountTopology {
 //        conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
         conf.setOptimizeThreadPoolTimeIntervalMs(10);
-        conf.setBoltThreadPoolCoreNum(8);
+        conf.setBoltThreadPoolCoreNum(3);
 
         if (args != null && args.length > 0) {
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());

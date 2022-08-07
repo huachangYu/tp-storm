@@ -47,6 +47,7 @@ public class BoltExecutorPool {
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
     private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
+
     public BoltExecutorPool(int coreNum) {
         this.coreNum = coreNum;
         this.taskQueues = new ConcurrentHashMap<>(coreNum);
@@ -59,18 +60,14 @@ public class BoltExecutorPool {
             if (taskQueues.size() == 0) {
                 emptyThreadWait.await();
             }
-            boolean allEmpty = true;
-            for (BlockingQueue<FutureTask<?>> queue : taskQueues.values()) {
-                if (queue.size() > 0) {
-                    allEmpty = false;
-                    break;
-                }
-            }
-            if (allEmpty) {
+            List<BoltExecutor> notEmptyThreads = threads.stream()
+                    .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
+            while (notEmptyThreads.isEmpty()) {
                 emptyQueueWait.await();
+                notEmptyThreads = threads.stream()
+                        .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             }
-            List<BoltExecutor> notEmptyThreads = threads.stream().filter(
-                    t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
+
             Collections.shuffle(notEmptyThreads);
             BoltExecutor maxQueueSizeThread = Collections.max(notEmptyThreads, (a, b) -> {
                 if (Math.abs(b.getWeight() - a.getWeight()) < eps) {

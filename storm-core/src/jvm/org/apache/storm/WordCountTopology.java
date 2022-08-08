@@ -104,7 +104,6 @@ public class WordCountTopology {
 //        conf.setDebug(true);
 //        conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
-        conf.setOptimizeThreadPoolTimeIntervalMs(10);
         conf.setBoltThreadPoolCoreNum(3);
 
         if (args != null && args.length > 0) {

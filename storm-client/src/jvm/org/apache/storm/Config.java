@@ -198,11 +198,6 @@ public class Config extends HashMap<String, Object> {
     @IsPositiveNumber
     public static final String TOPOLOGY_WORKERS = "topology.workers";
 
-
-    @IsInteger
-    @IsPositiveNumber
-    public static final String TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS = "topology.optimize.threadpool.time.interval.ms";
-
     @IsInteger
     @IsPositiveNumber
     public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM = "topology.bolt.threadpool.core.num";
@@ -1864,10 +1859,6 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
-    public static void setOptimizeThreadPoolTimeIntervalMs(Map<String, Object> conf, int timeInterval) {
-        conf.put(Config.TOPOLOGY_OPTIMIZE_THREAD_POOL_TIME_INTERVAL_MS, timeInterval);
-    }
-
     public static void setBoltThreadPoolCoreNum(Map<String, Object> conf, int coreNum) {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, coreNum);
     }
@@ -2011,10 +2002,6 @@ public class Config extends HashMap<String, Object> {
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")
     public void setNumWorkers(int workers) {
         setNumWorkers(this, workers);
-    }
-
-    public void setOptimizeThreadPoolTimeIntervalMs(int timeIntervalMs) {
-        setOptimizeThreadPoolTimeIntervalMs(this, timeIntervalMs);
     }
 
     public void setBoltThreadPoolCoreNum(int coreNum) {

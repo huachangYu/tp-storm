@@ -47,7 +47,7 @@ public class BoltExecutorPool {
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
     private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
-    private boolean running;
+    private volatile boolean running;
 
     public BoltExecutorPool(int coreNum) {
         this.coreNum = coreNum;
@@ -114,7 +114,6 @@ public class BoltExecutorPool {
     }
 
     public void shutdown() {
-        System.out.println("thread pool shutdown");
         this.running = false;
         for (BoltWorker worker : workers) {
             worker.interrupt();

@@ -26,7 +26,7 @@ public class BoltExecutorPool {
 
         @Override
         public void run() {
-            while (true) {
+            while (running) {
                 FutureTask<?> task = null;
                 try {
                     task = getTask();
@@ -47,11 +47,13 @@ public class BoltExecutorPool {
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
     private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
+    private boolean running;
 
     public BoltExecutorPool(int coreNum) {
         this.coreNum = coreNum;
         this.taskQueues = new ConcurrentHashMap<>(coreNum);
         this.workers = new ArrayList<>(coreNum);
+        this.running = true;
     }
 
     public FutureTask<?> getTask() throws InterruptedException {
@@ -112,6 +114,8 @@ public class BoltExecutorPool {
     }
 
     public void shutdown() {
+        System.out.println("thread pool shutdown");
+        this.running = false;
         for (BoltWorker worker : workers) {
             worker.interrupt();
         }

@@ -71,11 +71,12 @@ public class BoltExecutorPool {
             }
 
             Collections.shuffle(notEmptyThreads);
+            final long current = System.currentTimeMillis();
             BoltExecutor maxQueueSizeThread = Collections.max(notEmptyThreads, (a, b) -> {
-                if (Math.abs(b.getWeight() - a.getWeight()) < eps) {
+                if (Math.abs(b.getWeight(current) - a.getWeight(current)) < eps) {
                     return taskQueues.get(b.getName()).size() - taskQueues.get(a.getName()).size();
                 }
-                return b.getWeight() - a.getWeight() > 0 ? 1 : -1;
+                return b.getWeight(current) - a.getWeight(current) > 0 ? 1 : -1;
             });
             return taskQueues.get(maxQueueSizeThread.getName()).poll();
         } finally {

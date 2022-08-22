@@ -68,6 +68,8 @@ public class BoltExecutor extends Executor {
     private BoltExecutorPool boltExecutorPool;
     private String boltExecutorName;
 
+    private String threadPoolStrategy;
+
     public BoltExecutor(WorkerState workerData, List<Long> executorId, Map<String, String> credentials) {
         super(workerData, executorId, credentials, ClientStatsUtil.BOLT);
         this.executeSampler = ConfigUtils.mkStatsSampler(topoConf);
@@ -227,8 +229,12 @@ public class BoltExecutor extends Executor {
             boltObject.execute(tuple);
 
             Long ms = tuple.getExecuteSampleStartTime();
-            long delta = (ms != null) ? Time.deltaMs(ms) : -1;
-            monitor.record(delta);
+            long end = System.currentTimeMillis();
+            long delta = (ms != null) ? (end - ms) : -1;
+            if (ms != null) {
+                monitor.record(delta);
+            }
+            monitor.recordLastTime(end);
             if (isDebug) {
                 LOG.info("Execute done TUPLE {} TASK: {} DELTA: {}", tuple, taskId, delta);
             }
@@ -250,6 +256,8 @@ public class BoltExecutor extends Executor {
     public void setBoltThreadPool(BoltExecutorPool boltExecutorPool) {
         this.useThreadPool = boltExecutorPool != null;
         this.boltExecutorPool = boltExecutorPool;
+        this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
+                BoltWeightCalc.Strategy.Fair.name());
     }
 
     public ExecutorShutdown execute() throws Exception {
@@ -268,7 +276,20 @@ public class BoltExecutor extends Executor {
         return boltExecutorName;
     }
 
-    public double getWeight() {
-        return receiveQueue.size() * (1 + monitor.getAvgTime());
+    public double getWeight(long current) {
+        if (threadPoolStrategy == null ||
+                threadPoolStrategy.length() == 0 ||
+                threadPoolStrategy.equals(BoltWeightCalc.Strategy.Fair.name())) {
+            return BoltWeightCalc.fair(receiveQueue, monitor, current);
+        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.OnlyQueue.name())) {
+            return BoltWeightCalc.onlyQueue(receiveQueue, monitor, current);
+        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndCost.name())) {
+            return BoltWeightCalc.queueAndCost(receiveQueue, monitor, current);
+        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndWait.name())) {
+            return BoltWeightCalc.queueAndWait(receiveQueue, monitor, current);
+        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndCostAndWait.name())) {
+            return BoltWeightCalc.queueAndCostAndWait(receiveQueue, monitor, current);
+        }
+        return 0.0;
     }
 }

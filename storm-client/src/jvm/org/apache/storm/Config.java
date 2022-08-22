@@ -200,10 +200,13 @@ public class Config extends HashMap<String, Object> {
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM = "topology.bolt.threadpool.core.num";
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS = "topology.bolt.threadpool.core.threads";
 
     @IsBoolean
     public static final String TOPOLOGY_USE_BOLT_THREAD_POOL = "topology.bolt.threadpool.on";
+
+    @IsString
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_STRATEGY = "topology.bolt.threadpool.strategy";
 
     /**
      * How many instances to create for a spout/bolt. A task runs on a thread with zero or more other tasks for the same spout/bolt. The
@@ -1859,12 +1862,16 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
-    public static void setBoltThreadPoolCoreNum(Map<String, Object> conf, int coreNum) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, coreNum);
+    public static void setBoltThreadPoolCoreThreads(Map<String, Object> conf, int coreNum) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS, coreNum);
     }
 
     public static void setTopologyUseBoltThreadPool(Map<String, Object> conf, boolean isOn) {
         conf.put(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, isOn);
+    }
+
+    public static void setTopologyBoltThreadPoolStrategy(Map<String, Object> conf, String strategy) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY, strategy);
     }
 
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
@@ -2004,12 +2011,16 @@ public class Config extends HashMap<String, Object> {
         setNumWorkers(this, workers);
     }
 
-    public void setBoltThreadPoolCoreNum(int coreNum) {
-        setBoltThreadPoolCoreNum(this, coreNum);
+    public void setBoltThreadPoolCoreThreads(int coreNum) {
+        setBoltThreadPoolCoreThreads(this, coreNum);
     }
 
     public void useBoltThreadPool(boolean isOn) {
         setTopologyUseBoltThreadPool(this, isOn);
+    }
+
+    public void setTopologyBoltThreadPoolStrategy(String strategy) {
+        setTopologyBoltThreadPoolStrategy(this, strategy);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

@@ -255,7 +255,8 @@ topology.enable.message.timeouts: true
 topology.debug: false
 topology.workers: 1
 topology.bolt.threadpool.on: false
-topology.bolt.threadpool.core.num: 16
+topology.bolt.threadpool.core.threads: 16
+topology.bolt.threadpool.strategy: Fair
 topology.acker.executors: null
 topology.ras.acker.executors.per.worker: 1
 topology.eventlogger.executors: 0

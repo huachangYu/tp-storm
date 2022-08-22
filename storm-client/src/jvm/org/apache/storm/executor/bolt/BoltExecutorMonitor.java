@@ -4,6 +4,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 public class BoltExecutorMonitor {
+    private long lastTime = System.currentTimeMillis();
     private int windowsSize = 100;
     private long totalTime = 0;
     private Queue<Long> costTimeQueue = new LinkedList<>();
@@ -14,6 +15,14 @@ public class BoltExecutorMonitor {
         }
         costTimeQueue.add(cost);
         totalTime += totalTime;
+    }
+
+    public void recordLastTime(long ms) {
+        this.lastTime = ms;
+    }
+
+    public long getLastTime() {
+        return lastTime;
     }
 
     public synchronized double getAvgTime() {

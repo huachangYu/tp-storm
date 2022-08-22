@@ -250,8 +250,8 @@ public class WorkerState {
         this.receiver = this.mqContext.bind(topologyId, port, cb, newConnectionResponse);
         boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
         if (useThreadPool) {
-            Long coreNum = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_NUM, 16);
-            this.boltExecutorPool = new BoltExecutorPool(coreNum.intValue());
+            Long coreThreads = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS, 16);
+            this.boltExecutorPool = new BoltExecutorPool(coreThreads.intValue());
         }
     }
 

@@ -264,11 +264,11 @@ public class BoltExecutor extends Executor {
     public ExecutorShutdown execute() throws Exception {
         LOG.info("Loading executor tasks " + componentId + ":" + executorId);
 
-        Utils.SmartThread handler =
-                Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, boltExecutorName);
         if (useThreadPool) {
             this.boltExecutorPool.addThread(this);
         }
+        Utils.SmartThread handler =
+                Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, boltExecutorName);
         LOG.info("Finished loading executor " + componentId + ":" + executorId);
         return new ExecutorShutdown(this, Lists.newArrayList(handler), idToTask, receiveQueue);
     }

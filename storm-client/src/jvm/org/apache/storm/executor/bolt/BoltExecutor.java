@@ -258,6 +258,7 @@ public class BoltExecutor extends Executor {
         this.boltExecutorPool = boltExecutorPool;
         this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
                 BoltWeightCalc.Strategy.Fair.name());
+        this.monitor.setStrategy(this.threadPoolStrategy);
     }
 
     public ExecutorShutdown execute() throws Exception {
@@ -276,20 +277,20 @@ public class BoltExecutor extends Executor {
         return boltExecutorName;
     }
 
-    public double getWeight(long current) {
-        if (threadPoolStrategy == null ||
-                threadPoolStrategy.length() == 0 ||
-                threadPoolStrategy.equals(BoltWeightCalc.Strategy.Fair.name())) {
-            return BoltWeightCalc.fair(receiveQueue, monitor, current);
-        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.OnlyQueue.name())) {
-            return BoltWeightCalc.onlyQueue(receiveQueue, monitor, current);
-        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndCost.name())) {
-            return BoltWeightCalc.queueAndCost(receiveQueue, monitor, current);
-        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndWait.name())) {
-            return BoltWeightCalc.queueAndWait(receiveQueue, monitor, current);
-        } else if (threadPoolStrategy.equals(BoltWeightCalc.Strategy.QueueAndCostAndWait.name())) {
-            return BoltWeightCalc.queueAndCostAndWait(receiveQueue, monitor, current);
-        }
-        return 0.0;
+    public BoltExecutorMonitor getMonitor() {
+        return monitor;
     }
+
+    public double getWeight() {
+        return monitor.getWeight();
+    }
+
+    public double getLatestWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
+                                   double minAvgTime, double maxAvgTime,
+                                   long minWaitingTime, long maxWaitingTime) {
+        monitor.calculateWeight(current, taskQueueSize, minTaskQueueSize, maxTaskQueueSize,
+                minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
+        return monitor.getWeight();
+    }
+
 }

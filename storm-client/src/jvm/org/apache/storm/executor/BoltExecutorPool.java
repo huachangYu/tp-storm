@@ -7,6 +7,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -43,16 +44,21 @@ public class BoltExecutorPool {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition emptyThreadWait = lock.newCondition();
     private final Condition emptyQueueWait = lock.newCondition();
-    private final int coreNum;
+    private int coreThreads = 16;
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
     private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
-    private volatile boolean running;
+    private volatile boolean running = false;
+    private final AtomicInteger waitingThreads = new AtomicInteger(0);
 
-    public BoltExecutorPool(int coreNum) {
-        this.coreNum = coreNum;
-        this.taskQueues = new ConcurrentHashMap<>(coreNum);
-        this.workers = new ArrayList<>(coreNum);
+    public BoltExecutorPool() {
+        this(16);
+    }
+
+    public BoltExecutorPool(int coreThreads) {
+        this.coreThreads = coreThreads;
+        this.taskQueues = new ConcurrentHashMap<>(coreThreads);
+        this.workers = new ArrayList<>(coreThreads);
         this.running = true;
     }
 
@@ -62,7 +68,9 @@ public class BoltExecutorPool {
             List<BoltExecutor> notEmptyThreads = threads.stream()
                     .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             while (notEmptyThreads.isEmpty()) {
+                waitingThreads.addAndGet(1);
                 emptyQueueWait.await();
+                waitingThreads.addAndGet(-1);
                 notEmptyThreads = threads.stream()
                         .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             }
@@ -135,10 +143,12 @@ public class BoltExecutorPool {
         lock.lock();
         try {
             taskQueues.get(threadName).add(futureTask);
-            if (workers.size() < coreNum) {
+            if (workers.size() < coreThreads) {
                 addWorker();
             }
-            emptyQueueWait.signal();
+            if (waitingThreads.get() > 0) {
+                emptyQueueWait.signal();
+            }
         } finally {
             lock.unlock();
         }
@@ -147,7 +157,7 @@ public class BoltExecutorPool {
     private void addWorker() {
         lock.lock();
         try {
-            if (workers.size() < coreNum) {
+            if (workers.size() < coreThreads) {
                 BoltWorker worker = new BoltWorker("bolt-worker-" + workers.size());
                 workers.add(worker);
                 worker.start();

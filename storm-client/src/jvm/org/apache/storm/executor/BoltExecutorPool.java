@@ -75,7 +75,6 @@ public class BoltExecutorPool {
                         .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             }
 
-            Collections.shuffle(notEmptyThreads);
             final long current = System.currentTimeMillis();
             final int minTaskQueueSize = notEmptyThreads.stream().mapToInt(t -> taskQueues.get(t.getName()).size()).min().getAsInt();
             final int maxTaskQueueSize = notEmptyThreads.stream().mapToInt(t -> taskQueues.get(t.getName()).size()).max().getAsInt();
@@ -87,6 +86,7 @@ public class BoltExecutorPool {
                 boltExecutor.getMonitor().calculateWeight(current, taskQueues.get(boltExecutor.getName()).size(),
                         minTaskQueueSize, maxTaskQueueSize, minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
             }
+            Collections.shuffle(notEmptyThreads);
             BoltExecutor maxQueueSizeThread = Collections.max(notEmptyThreads, (a, b) -> {
                 if (Math.abs(b.getWeight() - a.getWeight()) < eps) {
                     return 0;

@@ -251,7 +251,8 @@ public class WorkerState {
         boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
         if (useThreadPool) {
             Long coreThreads = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS, 16);
-            this.boltExecutorPool = new BoltExecutorPool(coreThreads.intValue());
+            Long maxTasks = (Long)  topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, 1);
+            this.boltExecutorPool = new BoltExecutorPool(coreThreads.intValue(), maxTasks.intValue());
         }
     }
 

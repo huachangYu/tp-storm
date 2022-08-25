@@ -268,8 +268,6 @@ public class Worker implements Shutdownable, DaemonCommon {
             }
         }
 
-        boolean useBoltThread = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
-
         List<IRunningExecutor> newExecutors = new ArrayList<IRunningExecutor>();
         for (Executor executor : execs) {
             newExecutors.add(executor.execute());

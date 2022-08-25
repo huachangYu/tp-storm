@@ -54,7 +54,7 @@ public class BoltExecutorMonitor {
         }
     }
     
-    public void calculateWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
+    public double calculateWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
                                 double minAvgTime, double maxAvgTime,
                                 long minWeightTime, long maxWeightTime) {
         if (strategy == null
@@ -87,6 +87,7 @@ public class BoltExecutorMonitor {
         } else {
             this.weight = 0;
         }
+        return this.weight;
     }
 
     public void setWeight(double weight) {

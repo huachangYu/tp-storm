@@ -203,7 +203,11 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
             executor = new SpoutExecutor(workerState, executorId, credentials);
         } else {
             executor = new BoltExecutor(workerState, executorId, credentials);
-            if (!componentId.equals(Constants.SYSTEM_COMPONENT_ID) && !componentId.equals(Acker.ACKER_COMPONENT_ID)) {
+            List<String> boltIds = (List<String>) workerState.getTopologyConf().getOrDefault(
+                    Config.TOPOLOGY_BOLT_THREAD_POOL_IDS, new ArrayList<>());
+            if (boltIds.contains(componentId)
+                    && !componentId.equals(Constants.SYSTEM_COMPONENT_ID)
+                    && !componentId.equals(Acker.ACKER_COMPONENT_ID)) {
                 ((BoltExecutor) executor).setBoltThreadPool(workerState.getBoltExecutorPool());
             }
         }

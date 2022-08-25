@@ -2,12 +2,12 @@ package org.apache.storm.executor;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -28,14 +28,13 @@ public class BoltExecutorPool {
         @Override
         public void run() {
             while (running) {
-                FutureTask<?> task = null;
                 try {
-                    task = getTask();
+                    List<FutureTask<?>> tasks = getTask(maxTasks);
+                    for (FutureTask<?> task : tasks) {
+                        task.run();
+                    }
                 } catch (InterruptedException e) {
                     LOG.warn("error occurred when getting task. ex:{}", e.getMessage());
-                }
-                if (task != null) {
-                    task.run();
                 }
             }
         }
@@ -47,30 +46,29 @@ public class BoltExecutorPool {
     private int coreThreads = 16;
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
-    private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
-    private volatile boolean running = false;
-    private final AtomicInteger waitingThreads = new AtomicInteger(0);
+    private final Map<String, Queue<FutureTask<?>>> taskQueues;
+    private volatile boolean running;
+    private final int maxTasks;
 
     public BoltExecutorPool() {
-        this(16);
+        this(16, 1);
     }
 
-    public BoltExecutorPool(int coreThreads) {
+    public BoltExecutorPool(int coreThreads, int maxTasks) {
         this.coreThreads = coreThreads;
-        this.taskQueues = new ConcurrentHashMap<>(coreThreads);
+        this.taskQueues = new HashMap<>(coreThreads);
         this.workers = new ArrayList<>(coreThreads);
         this.running = true;
+        this.maxTasks = maxTasks;
     }
 
-    public FutureTask<?> getTask() throws InterruptedException {
+    public List<FutureTask<?>> getTask(int maxNum) throws InterruptedException {
         lock.lock();
         try {
             List<BoltExecutor> notEmptyThreads = threads.stream()
                     .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             while (notEmptyThreads.isEmpty()) {
-                waitingThreads.addAndGet(1);
                 emptyQueueWait.await();
-                waitingThreads.addAndGet(-1);
                 notEmptyThreads = threads.stream()
                         .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             }
@@ -93,7 +91,12 @@ public class BoltExecutorPool {
                 }
                 return b.getWeight() - a.getWeight() > 0 ? 1 : -1;
             });
-            return taskQueues.get(maxQueueSizeThread.getName()).poll();
+            Queue<FutureTask<?>> queue = taskQueues.get(maxQueueSizeThread.getName());
+            List<FutureTask<?>> tasks = new ArrayList<>();
+            while (!queue.isEmpty() && tasks.size() < maxNum) {
+                tasks.add(queue.poll());
+            }
+            return tasks;
         } finally {
             lock.unlock();
         }
@@ -113,7 +116,7 @@ public class BoltExecutorPool {
                 return;
             }
             threads.add(thread);
-            taskQueues.put(threadName, new LinkedBlockingQueue<>());
+            taskQueues.put(threadName, new LinkedList<>());
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -146,9 +149,7 @@ public class BoltExecutorPool {
             if (workers.size() < coreThreads) {
                 addWorker();
             }
-            if (waitingThreads.get() > 0) {
-                emptyQueueWait.signal();
-            }
+            emptyQueueWait.signal();
         } finally {
             lock.unlock();
         }

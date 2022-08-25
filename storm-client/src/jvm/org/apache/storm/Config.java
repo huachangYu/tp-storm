@@ -25,6 +25,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.apache.storm.metric.IEventLogger;
 import org.apache.storm.policy.IWaitStrategy;
 import org.apache.storm.serialization.IKryoDecorator;
@@ -207,6 +209,12 @@ public class Config extends HashMap<String, Object> {
 
     @IsString
     public static final String TOPOLOGY_BOLT_THREAD_POOL_STRATEGY = "topology.bolt.threadpool.strategy";
+
+    @IsStringList
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_IDS = "topology.bolt.in.threadpool.ids";
+
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS = "topology.bolt.in.threadpool.fetch.max.tasks";
 
     /**
      * How many instances to create for a spout/bolt. A task runs on a thread with zero or more other tasks for the same spout/bolt. The
@@ -1874,6 +1882,14 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY, strategy);
     }
 
+    public static void setTopologyBoltThreadPoolIds(Map<String, Object> conf, List<String> boltIds) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_IDS, boltIds);
+    }
+
+    public static void setTopologyBoltThreadPoolFetchMaxTasks(Map<String, Object> conf, int maxTasks) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, maxTasks);
+    }
+
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
         conf.put(Config.TOPOLOGY_ACKER_EXECUTORS, numExecutors);
     }
@@ -2021,6 +2037,14 @@ public class Config extends HashMap<String, Object> {
 
     public void setTopologyBoltThreadPoolStrategy(String strategy) {
         setTopologyBoltThreadPoolStrategy(this, strategy);
+    }
+
+    public void setTopologyBoltThreadPoolIds(List<String> boltIds) {
+        setTopologyBoltThreadPoolIds(this, boltIds);
+    }
+
+    public void setTopologyBoltThreadPoolFetchMaxTasks(int maxTasks) {
+        setTopologyBoltThreadPoolFetchMaxTasks(this, maxTasks);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

@@ -1882,12 +1882,24 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY, strategy);
     }
 
+    public void setTopologyBoltThreadPoolStrategy(String strategy) {
+        setTopologyBoltThreadPoolStrategy(this, strategy);
+    }
+
     public static void setTopologyBoltThreadPoolIds(Map<String, Object> conf, List<String> boltIds) {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_IDS, boltIds);
     }
 
+    public void setTopologyBoltThreadPoolIds(List<String> boltIds) {
+        setTopologyBoltThreadPoolIds(this, boltIds);
+    }
+
     public static void setTopologyBoltThreadPoolFetchMaxTasks(Map<String, Object> conf, int maxTasks) {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, maxTasks);
+    }
+
+    public void setTopologyBoltThreadPoolFetchMaxTasks(int maxTasks) {
+        setTopologyBoltThreadPoolFetchMaxTasks(this, maxTasks);
     }
 
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
@@ -2033,18 +2045,6 @@ public class Config extends HashMap<String, Object> {
 
     public void useBoltThreadPool(boolean isOn) {
         setTopologyUseBoltThreadPool(this, isOn);
-    }
-
-    public void setTopologyBoltThreadPoolStrategy(String strategy) {
-        setTopologyBoltThreadPoolStrategy(this, strategy);
-    }
-
-    public void setTopologyBoltThreadPoolIds(List<String> boltIds) {
-        setTopologyBoltThreadPoolIds(this, boltIds);
-    }
-
-    public void setTopologyBoltThreadPoolFetchMaxTasks(int maxTasks) {
-        setTopologyBoltThreadPoolFetchMaxTasks(this, maxTasks);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

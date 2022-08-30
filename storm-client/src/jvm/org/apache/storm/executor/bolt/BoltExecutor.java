@@ -26,6 +26,7 @@ import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
 import org.apache.storm.executor.BoltExecutorPool;
+import org.apache.storm.executor.BoltTask;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
@@ -162,13 +163,7 @@ public class BoltExecutor extends Executor {
                         LOG.debug("Ending Back Pressure Wait stretch : {}", bpIdleCount);
                     }
                     bpIdleCount = 0;
-                    FutureTask<Integer> futureTask = new FutureTask<>(() -> receiveQueue.consume(BoltExecutor.this, tillNoPendingEmits));
-                    if (useThreadPool) {
-                        boltExecutorPool.submit(getName(), futureTask);
-                    } else {
-                        futureTask.run();
-                    }
-                    int consumeCount = futureTask.get();
+                    int consumeCount = receiveQueue.consume(BoltExecutor.this, tillNoPendingEmits);
                     if (consumeCount == 0) {
                         if (consumeIdleCounter == 0) {
                             LOG.debug("Invoking consume wait strategy");
@@ -226,14 +221,20 @@ public class BoltExecutor extends Executor {
             if (isExecuteSampler) {
                 tuple.setExecuteSampleStartTime(now);
             }
-            boltObject.execute(tuple);
+            if (useThreadPool && receiveQueue.size() >= 10) {
+                FutureTask<Integer> task = new FutureTask<>(() -> {
+                    boltObject.execute(tuple);
+                    return 0;
+                });
+                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, (isSampled || isExecuteSampler)));
+                task.get();
+            } else {
+                boltObject.execute(tuple);
+            }
 
             Long ms = tuple.getExecuteSampleStartTime();
             long end = System.currentTimeMillis();
             long delta = (ms != null) ? (end - ms) : -1;
-            if (ms != null) {
-                monitor.record(delta);
-            }
             monitor.recordLastTime(end);
             if (isDebug) {
                 LOG.info("Execute done TUPLE {} TASK: {} DELTA: {}", tuple, taskId, delta);

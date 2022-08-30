@@ -1,16 +1,14 @@
 package org.apache.storm.executor;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -22,7 +20,7 @@ import org.slf4j.LoggerFactory;
 
 public class BoltExecutorPool {
     private static final Logger LOG = LoggerFactory.getLogger(BoltExecutorPool.class);
-    private static final double eps = 1e-6;
+    private static final double EPS = 1e-5;
 
     private class BoltWorker extends Thread {
         BoltWorker(String threadName) {
@@ -33,9 +31,14 @@ public class BoltExecutorPool {
         public void run() {
             while (running) {
                 try {
-                    List<FutureTask<?>> tasks = getTask(maxTasks);
-                    for (FutureTask<?> task : tasks) {
-                        task.run();
+                    List<BoltTask> tasks = getTask(maxTasks);
+                    for (BoltTask task : tasks) {
+                        long start = task.isNeedToRecord() ? System.currentTimeMillis() : 0;
+                        task.getTask().run();
+                        if (start > 0) {
+                            long end = System.currentTimeMillis();
+                            task.getMonitor().record(end - start);
+                        }
                     }
                 } catch (InterruptedException e) {
                     LOG.warn("error occurred when getting task. ex:{}", e.getMessage());
@@ -50,7 +53,7 @@ public class BoltExecutorPool {
     private final int coreThreads;
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final List<BoltWorker> workers;
-    private final ConcurrentHashMap<String, BlockingQueue<FutureTask<?>>> taskQueues;
+    private final ConcurrentHashMap<String, BlockingQueue<BoltTask>> taskQueues;
     private final AtomicInteger totalTaskCount;
     private volatile boolean running;
     private final int maxTasks;
@@ -71,7 +74,7 @@ public class BoltExecutorPool {
         }
     }
 
-    public List<FutureTask<?>> getTask(int maxNum) throws InterruptedException {
+    public List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
         lock.lock();
         try {
             List<BoltExecutor> notEmptyThreads = threads.stream()
@@ -83,26 +86,40 @@ public class BoltExecutorPool {
             }
 
             final long current = System.currentTimeMillis();
-            final int minTaskQueueSize = notEmptyThreads.stream().mapToInt(t -> taskQueues.get(t.getName()).size()).min().getAsInt();
-            final int maxTaskQueueSize = notEmptyThreads.stream().mapToInt(t -> taskQueues.get(t.getName()).size()).max().getAsInt();
-            final double minAvgTime = notEmptyThreads.stream().mapToDouble(t -> t.getMonitor().getAvgTime()).min().getAsDouble();
-            final double maxAvgTime = notEmptyThreads.stream().mapToDouble(t -> t.getMonitor().getAvgTime()).max().getAsDouble();
-            final long minWaitingTime = notEmptyThreads.stream().mapToLong(t -> t.getMonitor().getWaitingTime(current)).min().getAsLong();
-            final long maxWaitingTime = notEmptyThreads.stream().mapToLong(t -> t.getMonitor().getWaitingTime(current)).max().getAsLong();
-            for (BoltExecutor boltExecutor : notEmptyThreads) {
-                boltExecutor.getMonitor().calculateWeight(current, taskQueues.get(boltExecutor.getName()).size(),
-                        minTaskQueueSize, maxTaskQueueSize, minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
+            BoltExecutor firstThread = notEmptyThreads.get(0);
+            int minTaskQueueSize = taskQueues.get(firstThread.getName()).size();
+            int maxTaskQueueSize = minTaskQueueSize;
+            double minAvgTime = firstThread.getMonitor().getAvgTime();
+            double maxAvgTime = minAvgTime;
+            long minWaitingTime = firstThread.getMonitor().getWaitingTime(current);
+            long maxWaitingTime = minWaitingTime;
+            for (int i = 1; i < notEmptyThreads.size(); i++) {
+                int queueSize = taskQueues.get(notEmptyThreads.get(i).getName()).size();
+                minTaskQueueSize = Math.min(minTaskQueueSize, queueSize);
+                maxTaskQueueSize = Math.max(maxTaskQueueSize, queueSize);
+                double avgTime = notEmptyThreads.get(i).getMonitor().getAvgTime();
+                minAvgTime = Math.min(minAvgTime, avgTime);
+                maxAvgTime = Math.max(maxAvgTime, avgTime);
+                long waitingTime = notEmptyThreads.get(i).getMonitor().getWaitingTime(current);
+                minWaitingTime = Math.min(minWaitingTime, waitingTime);
+                maxWaitingTime = Math.max(maxWaitingTime, waitingTime);
             }
-            Collections.shuffle(notEmptyThreads);
-            BoltExecutor maxQueueSizeThread = Collections.max(notEmptyThreads, (a, b) -> {
-                if (Math.abs(b.getWeight() - a.getWeight()) < eps) {
-                    return 0;
+            double maxWeight = 0.0;
+            for (BoltExecutor boltExecutor : notEmptyThreads) {
+                double weight = boltExecutor.getMonitor().calculateWeight(current, taskQueues.get(boltExecutor.getName()).size(),
+                        minTaskQueueSize, maxTaskQueueSize, minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
+                maxWeight = Math.max(maxWeight, weight);
+            }
+            List<BoltTask> tasks = new ArrayList<>();
+            List<BoltExecutor> maxWeightBoltThreads = new ArrayList<>();
+            for (BoltExecutor boltExecutor : notEmptyThreads) {
+                if (Math.abs(boltExecutor.getWeight() - maxWeight) < EPS) {
+                    maxWeightBoltThreads.add(boltExecutor);
                 }
-                return b.getWeight() - a.getWeight() > 0 ? 1 : -1;
-            });
-            Queue<FutureTask<?>> queue = taskQueues.get(maxQueueSizeThread.getName());
-            List<FutureTask<?>> tasks = new ArrayList<>();
-            while (!queue.isEmpty() && tasks.size() < maxNum) {
+            }
+            Queue<BoltTask> queue = taskQueues.get(maxWeightBoltThreads.get(
+                    ThreadLocalRandom.current().nextInt(maxWeightBoltThreads.size())).getName());
+            while (!queue.isEmpty() && tasks.size() < maxTaskSize) {
                 tasks.add(queue.poll());
                 totalTaskCount.getAndDecrement();
             }
@@ -152,7 +169,7 @@ public class BoltExecutorPool {
         }
     }
 
-    public void submit(String threadName, FutureTask<?> futureTask) {
+    public void submit(String threadName, BoltTask futureTask) {
         taskQueues.get(threadName).add(futureTask);
         int c = totalTaskCount.getAndIncrement();
         if (c == 0) {

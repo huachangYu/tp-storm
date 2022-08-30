@@ -1,26 +1,31 @@
 package org.apache.storm.executor.bolt;
 
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class BoltExecutorMonitor {
     private long lastTime = System.currentTimeMillis();
-    private int windowsSize = 100;
-    private long totalTime = 0;
-    private ConcurrentLinkedQueue<Long> costTimeQueue = new ConcurrentLinkedQueue<>();
+    private int windowsSize = 50;
+    private BlockingQueue<Long> costTimeQueue = new LinkedBlockingQueue<>();
     private ReentrantLock lock = new ReentrantLock();
     private double weight = 0.0;
-    
     private String strategy;
 
     public void record(long cost) {
+        if (cost < 0) {
+            cost = 0;
+        }
         lock.lock();
         try {
             if (costTimeQueue.size() >= windowsSize) {
-                totalTime -= costTimeQueue.poll();
+                costTimeQueue.poll();
             }
             costTimeQueue.add(cost);
-            totalTime += totalTime;
         } finally {
             lock.unlock();
         }
@@ -43,15 +48,12 @@ public class BoltExecutorMonitor {
     }
 
     public double getAvgTime() {
-        lock.lock();
-        try {
-            if (costTimeQueue.size() == 0) {
-                return 0;
-            }
-            return (double) totalTime / (double) costTimeQueue.size();
-        } finally {
-            lock.unlock();
+        Queue<Long> queue = new LinkedList<>(costTimeQueue);
+        if (queue.size() == 0) {
+            return 0;
         }
+        long totalTime = queue.stream().mapToLong(t -> t).sum();
+        return (double) totalTime / (double) queue.size();
     }
     
     public double calculateWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
@@ -96,5 +98,17 @@ public class BoltExecutorMonitor {
 
     public double getWeight() {
         return weight;
+    }
+
+    @Override
+    public String toString() {
+        return "BoltExecutorMonitor{"
+                + "lastTime=" + lastTime
+                + ", windowsSize=" + windowsSize
+                + ", costTimeQueue=" + costTimeQueue
+                + ", lock=" + lock
+                + ", weight=" + weight
+                + ", strategy='" + strategy + '\''
+                + '}';
     }
 }

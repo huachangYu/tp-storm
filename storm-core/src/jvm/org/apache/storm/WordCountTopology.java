@@ -106,8 +106,6 @@ public class WordCountTopology {
         builder.setBolt("count", new WordCount(), 4).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
-//        conf.setDebug(true);
-//        conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
         conf.setBoltThreadPoolCoreThreads(3);
         conf.setTopologyBoltThreadPoolFetchMaxTasks(3);
@@ -117,13 +115,8 @@ public class WordCountTopology {
         if (args != null && args.length > 0) {
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());
         } else {
-//            conf.setMaxTaskParallelism(3);
             LocalCluster cluster = new LocalCluster();
             cluster.submitTopology("word-count", conf, builder.createTopology());
-
-            // 设置时间长一点，否则可能看不到运行的输出
-            Thread.sleep(100 * 1000);
-            cluster.shutdown();
         }
     }
 }

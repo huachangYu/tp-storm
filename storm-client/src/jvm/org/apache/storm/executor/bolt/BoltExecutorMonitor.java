@@ -6,12 +6,18 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class BoltExecutorMonitor {
     private long lastTime = System.currentTimeMillis();
     private int windowsSize = 50;
     private BlockingQueue<Long> costTimeQueue = new LinkedBlockingQueue<>();
+    private AtomicLong totalTime = new AtomicLong(0);
     private ReentrantLock lock = new ReentrantLock();
     private double weight = 0.0;
     private String strategy;
@@ -23,9 +29,10 @@ public class BoltExecutorMonitor {
         lock.lock();
         try {
             if (costTimeQueue.size() >= windowsSize) {
-                costTimeQueue.poll();
+                totalTime.addAndGet(-costTimeQueue.poll());
             }
             costTimeQueue.add(cost);
+            totalTime.addAndGet(cost);
         } finally {
             lock.unlock();
         }
@@ -48,12 +55,12 @@ public class BoltExecutorMonitor {
     }
 
     public double getAvgTime() {
-        Queue<Long> queue = new LinkedList<>(costTimeQueue);
-        if (queue.size() == 0) {
+        int size;
+        if ((size = costTimeQueue.size()) == 0) {
             return 0;
         }
-        long totalTime = queue.stream().mapToLong(t -> t).sum();
-        return (double) totalTime / (double) queue.size();
+        // it is thread-unsafe, but has little effect. To improve performance, don't lock it
+        return (double) totalTime.get() / (double) size;
     }
     
     public double calculateWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,

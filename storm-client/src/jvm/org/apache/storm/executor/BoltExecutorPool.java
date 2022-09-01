@@ -3,10 +3,8 @@ package org.apache.storm.executor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
-import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -192,6 +190,7 @@ public class BoltExecutorPool {
             if (workers.size() < coreThreads) {
                 BoltWorker worker = new BoltWorker("bolt-worker-" + workers.size());
                 workers.add(worker);
+                worker.setPriority(Thread.MAX_PRIORITY);
                 worker.start();
             }
         } finally {

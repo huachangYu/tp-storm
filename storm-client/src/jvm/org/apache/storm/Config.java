@@ -22,11 +22,13 @@ import com.esotericsoftware.kryo.Serializer;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.storm.executor.bolt.BoltWeightCalc;
 import org.apache.storm.metric.IEventLogger;
 import org.apache.storm.policy.IWaitStrategy;
 import org.apache.storm.serialization.IKryoDecorator;
@@ -1883,7 +1885,13 @@ public class Config extends HashMap<String, Object> {
     }
 
     public void setTopologyBoltThreadPoolStrategy(String strategy) {
-        setTopologyBoltThreadPoolStrategy(this, strategy);
+        for (BoltWeightCalc.Strategy systemStrategy : BoltWeightCalc.Strategy.values()) {
+            if (systemStrategy.name().equals(strategy)) {
+                setTopologyBoltThreadPoolStrategy(this, strategy);
+                return;
+            }
+        }
+        throw new RuntimeException("invalid strategy.");
     }
 
     public static void setTopologyBoltThreadPoolIds(Map<String, Object> conf, List<String> boltIds) {

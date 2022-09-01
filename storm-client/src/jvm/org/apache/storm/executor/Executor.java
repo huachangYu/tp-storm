@@ -208,7 +208,7 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
             if (boltIds.contains(componentId)
                     && !componentId.equals(Constants.SYSTEM_COMPONENT_ID)
                     && !componentId.equals(Acker.ACKER_COMPONENT_ID)) {
-                ((BoltExecutor) executor).setBoltThreadPool(workerState.getBoltExecutorPool());
+                ((BoltExecutor) executor).initBoltThreadPool(workerState.getBoltExecutorPool());
             }
         }
 

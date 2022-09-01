@@ -1,11 +1,11 @@
 package org.apache.storm.executor.bolt;
 
-import org.apache.storm.utils.JCQueue;
-
 public class BoltWeightCalc {
     public enum Strategy {
         Fair, OnlyQueue, QueueAndCost, QueueAndWait, QueueAndCostAndWait
     }
+
+    private static final double EPS = 1e-5;
 
     public static double fair(int taskQueueSize, double avgTime, long waitingTime,
                               int minTaskQueueSize, int maxTaskQueueSize,
@@ -31,24 +31,24 @@ public class BoltWeightCalc {
         if (waitingTime > 5000) {
             return Double.MAX_VALUE;
         }
-        return taskQueueSize * (1 + avgTime);
+        return taskQueueSize * (avgTime < EPS ? 1.0 : avgTime);
     }
 
     public static double queueAndWait(int taskQueueSize, double avgTime, long waitingTime,
                                       int minTaskQueueSize, int maxTaskQueueSize,
                                       double minAvgTime, double maxAvgTime,
                                       long minWaitingTime, long maxWaitingTime) {
-        return (double) taskQueueSize / (double) Math.max(maxTaskQueueSize - minTaskQueueSize, 1)
-                + (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
+        double stdWaitingTime = (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
+        return taskQueueSize * stdWaitingTime;
     }
 
     public static double queueAndCostAndWait(int taskQueueSize, double avgTime, long waitingTime,
                                              int minTaskQueueSize, int maxTaskQueueSize,
                                              double minAvgTime, double maxAvgTime,
                                              long minWaitingTime, long maxWaitingTime) {
-        return (double) taskQueueSize / (double) Math.max(maxTaskQueueSize - minTaskQueueSize, 1)
-                + avgTime / Math.max(maxAvgTime - minAvgTime, 1)
-                + (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
+        double stdWaitingTime = (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
+        double stdAvgTime = avgTime / Math.max(maxAvgTime - minAvgTime, 1);
+        return taskQueueSize * (1 + stdWaitingTime / stdAvgTime);
     }
 
 }

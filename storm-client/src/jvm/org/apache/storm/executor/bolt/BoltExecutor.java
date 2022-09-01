@@ -62,13 +62,11 @@ public class BoltExecutor extends Executor {
     private final IWaitStrategy consumeWaitStrategy;       // employed when no incoming data
     private final IWaitStrategy backPressureWaitStrategy;  // employed when outbound path is congested
     private final BoltExecutorStats stats;
+    private final BoltExecutorMonitor monitor;
+    private final String boltExecutorName;
     private BoltOutputCollectorImpl outputCollector;
-
-    private BoltExecutorMonitor monitor;
     private boolean useThreadPool;
     private BoltExecutorPool boltExecutorPool;
-    private String boltExecutorName;
-
     private String threadPoolStrategy;
 
     public BoltExecutor(WorkerState workerData, List<Long> executorId, Map<String, String> credentials) {
@@ -254,7 +252,7 @@ public class BoltExecutor extends Executor {
         }
     }
 
-    public void setBoltThreadPool(BoltExecutorPool boltExecutorPool) {
+    public void initBoltThreadPool(BoltExecutorPool boltExecutorPool) {
         this.useThreadPool = boltExecutorPool != null;
         this.boltExecutorPool = boltExecutorPool;
         this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,

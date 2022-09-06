@@ -1,17 +1,12 @@
 package org.apache.storm.executor.bolt;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerArray;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
+
+import org.apache.storm.utils.ConfigUtils;
 
 public class BoltExecutorMonitor {
     private long lastTime = System.currentTimeMillis();
@@ -21,6 +16,7 @@ public class BoltExecutorMonitor {
     private ReentrantLock lock = new ReentrantLock();
     private double weight = 0.0;
     private String strategy;
+    protected BooleanSupplier sampler = ConfigUtils.evenSampler(10);
 
     public void record(long cost) {
         if (cost < 0) {
@@ -105,6 +101,10 @@ public class BoltExecutorMonitor {
 
     public double getWeight() {
         return weight;
+    }
+
+    public boolean checkSample() {
+        return sampler.getAsBoolean();
     }
 
     @Override

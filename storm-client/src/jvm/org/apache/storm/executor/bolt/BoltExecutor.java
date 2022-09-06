@@ -62,12 +62,7 @@ public class BoltExecutor extends Executor {
     private final IWaitStrategy consumeWaitStrategy;       // employed when no incoming data
     private final IWaitStrategy backPressureWaitStrategy;  // employed when outbound path is congested
     private final BoltExecutorStats stats;
-    private final BoltExecutorMonitor monitor;
-    private final String boltExecutorName;
     private BoltOutputCollectorImpl outputCollector;
-    private boolean useThreadPool;
-    private BoltExecutorPool boltExecutorPool;
-    private String threadPoolStrategy;
 
     public BoltExecutor(WorkerState workerData, List<Long> executorId, Map<String, String> credentials) {
         super(workerData, executorId, credentials, ClientStatsUtil.BOLT);
@@ -85,7 +80,6 @@ public class BoltExecutor extends Executor {
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
         this.useThreadPool = false;
         this.monitor = new BoltExecutorMonitor();
-        this.boltExecutorName = componentId + "-executor" + executorId;
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {
@@ -161,8 +155,8 @@ public class BoltExecutor extends Executor {
                         LOG.debug("Ending Back Pressure Wait stretch : {}", bpIdleCount);
                     }
                     bpIdleCount = 0;
-                    int consumeCount = receiveQueue.consume(BoltExecutor.this, tillNoPendingEmits);
-                    if (consumeCount == 0) {
+                    receiveQueue.consume(BoltExecutor.this, tillNoPendingEmits);
+                    if (receiveQueue.size() == 0) {
                         if (consumeIdleCounter == 0) {
                             LOG.debug("Invoking consume wait strategy");
                         }
@@ -219,21 +213,10 @@ public class BoltExecutor extends Executor {
             if (isExecuteSampler) {
                 tuple.setExecuteSampleStartTime(now);
             }
-            if (useThreadPool && receiveQueue.size() >= 10) {
-                FutureTask<Integer> task = new FutureTask<>(() -> {
-                    boltObject.execute(tuple);
-                    return 0;
-                });
-                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, (isSampled || isExecuteSampler)));
-                task.get();
-            } else {
-                boltObject.execute(tuple);
-            }
+            boltObject.execute(tuple);
 
             Long ms = tuple.getExecuteSampleStartTime();
-            long end = System.currentTimeMillis();
-            long delta = (ms != null) ? (end - ms) : -1;
-            monitor.recordLastTime(end);
+            long delta = (ms != null) ? (System.currentTimeMillis() - ms) : -1;
             if (isDebug) {
                 LOG.info("Execute done TUPLE {} TASK: {} DELTA: {}", tuple, taskId, delta);
             }
@@ -267,17 +250,9 @@ public class BoltExecutor extends Executor {
             this.boltExecutorPool.addThread(this);
         }
         Utils.SmartThread handler =
-                Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, boltExecutorName);
+                Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, getName());
         LOG.info("Finished loading executor " + componentId + ":" + executorId);
         return new ExecutorShutdown(this, Lists.newArrayList(handler), idToTask, receiveQueue);
-    }
-
-    public String getName() {
-        return boltExecutorName;
-    }
-
-    public BoltExecutorMonitor getMonitor() {
-        return monitor;
     }
 
     public double getWeight() {

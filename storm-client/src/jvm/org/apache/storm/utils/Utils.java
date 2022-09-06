@@ -397,9 +397,6 @@ public class Utils {
                         if (s == null) { // then stop running it
                             break;
                         }
-                        if (s > 0) {
-                            Time.sleep(s);
-                        }
                     }
                 } catch (Throwable t) {
                     if (Utils.exceptionCauseIsInstanceOf(

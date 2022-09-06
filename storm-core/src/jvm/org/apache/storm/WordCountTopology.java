@@ -1,13 +1,9 @@
 package org.apache.storm;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
@@ -106,6 +102,7 @@ public class WordCountTopology {
         builder.setBolt("count", new WordCount(), 4).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
+        // conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
         conf.setBoltThreadPoolCoreThreads(3);
         conf.setTopologyBoltThreadPoolFetchMaxTasks(3);

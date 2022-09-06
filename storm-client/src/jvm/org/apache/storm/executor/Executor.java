@@ -32,6 +32,7 @@ import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,6 +52,7 @@ import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.worker.WorkerState;
 import org.apache.storm.executor.bolt.BoltExecutor;
+import org.apache.storm.executor.bolt.BoltExecutorMonitor;
 import org.apache.storm.executor.error.IReportError;
 import org.apache.storm.executor.error.ReportError;
 import org.apache.storm.executor.error.ReportErrorAndDie;
@@ -131,6 +133,11 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
     private final RateCounter reportedErrorCount;
     private final boolean enableV2MetricsDataPoints;
     private final Integer v2MetricsTickInterval;
+
+    protected boolean useThreadPool;
+    protected BoltExecutorPool boltExecutorPool;
+    protected String threadPoolStrategy;
+    protected BoltExecutorMonitor monitor;
 
     protected Executor(WorkerState workerData, List<Long> executorId, Map<String, String> credentials, String type) {
         this.workerData = workerData;
@@ -297,12 +304,20 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
         }
 
         try {
-            if (taskId != AddressedTuple.BROADCAST_DEST) {
-                tupleActionFn(taskId, tuple);
-            } else {
-                for (Integer t : taskIds) {
-                    tupleActionFn(t, tuple);
+            FutureTask<Void> task = new FutureTask<>(() -> {
+                if (taskId != AddressedTuple.BROADCAST_DEST) {
+                    tupleActionFn(taskId, tuple);
+                } else {
+                    for (Integer t : taskIds) {
+                        tupleActionFn(t, tuple);
+                    }
                 }
+                return null;
+            });
+            if (useThreadPool && receiveQueue.size() >= 10) {
+                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, monitor.checkSample()));
+            } else {
+                task.run();
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -719,5 +734,13 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
 
     public void incrementReportedErrorCount() {
         reportedErrorCount.inc(1L);
+    }
+
+    public String getName() {
+        return componentId + "-executor" + executorId;
+    }
+
+    public BoltExecutorMonitor getMonitor() {
+        return monitor;
     }
 }

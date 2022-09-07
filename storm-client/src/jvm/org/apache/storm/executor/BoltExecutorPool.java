@@ -33,7 +33,7 @@ public class BoltExecutorPool {
                     List<BoltTask> tasks = getTask(maxTasks);
                     for (BoltTask task : tasks) {
                         long start = task.isNeedToRecord() ? System.currentTimeMillis() : 0;
-                        task.getTask().run();
+                        task.run();
                         if (start > 0) {
                             long end = System.currentTimeMillis();
                             task.getMonitor().record(end - start);

@@ -304,16 +304,19 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
         }
 
         try {
-            FutureTask<Void> task = new FutureTask<>(() -> {
-                if (taskId != AddressedTuple.BROADCAST_DEST) {
-                    tupleActionFn(taskId, tuple);
-                } else {
-                    for (Integer t : taskIds) {
-                        tupleActionFn(t, tuple);
+            Runnable task = () -> {
+                try {
+                    if (taskId != AddressedTuple.BROADCAST_DEST) {
+                        tupleActionFn(taskId, tuple);
+                    } else {
+                        for (Integer t : taskIds) {
+                            tupleActionFn(t, tuple);
+                        }
                     }
+                } catch (Exception ex) {
+                    LOG.warn("failed to run task. ex:{}", ex.getMessage());
                 }
-                return null;
-            });
+            };
             if (useThreadPool && receiveQueue.size() >= 10) {
                 boltExecutorPool.submit(getName(), new BoltTask(task, monitor, monitor.checkSample()));
             } else {

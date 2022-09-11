@@ -18,9 +18,6 @@ public class BoltWeightCalc {
                                    int minTaskQueueSize, int maxTaskQueueSize,
                                    double minAvgTime, double maxAvgTime,
                                    long minWaitingTime, long maxWaitingTime) {
-        if (waitingTime > 5000) {
-            return Double.MAX_VALUE;
-        }
         return taskQueueSize;
     }
 
@@ -28,9 +25,6 @@ public class BoltWeightCalc {
                                       int minTaskQueueSize, int maxTaskQueueSize,
                                       double minAvgTime, double maxAvgTime,
                                       long minWaitingTime, long maxWaitingTime) {
-        if (waitingTime > 5000) {
-            return Double.MAX_VALUE;
-        }
         return taskQueueSize * (avgTime < EPS ? 1.0 : avgTime);
     }
 
@@ -48,7 +42,7 @@ public class BoltWeightCalc {
                                              long minWaitingTime, long maxWaitingTime) {
         double stdWaitingTime = (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
         double stdAvgTime = avgTime / Math.max(maxAvgTime - minAvgTime, 1);
-        return taskQueueSize * (1 + stdWaitingTime / stdAvgTime);
+        return taskQueueSize * (1 + stdWaitingTime / Math.max(stdAvgTime, 0.001));
     }
 
 }

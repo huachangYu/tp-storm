@@ -32,11 +32,10 @@ public class BoltExecutorPool {
                 try {
                     List<BoltTask> tasks = getTask(maxTasks);
                     for (BoltTask task : tasks) {
-                        long start = task.isNeedToRecord() ? System.currentTimeMillis() : 0;
                         task.run();
-                        if (start > 0) {
-                            long end = System.currentTimeMillis();
-                            task.getMonitor().record(end - start);
+                        if (task.isNeedToRecord()) {
+                            task.getMonitor().record(task.getCost());
+                            task.printMetrics();
                         }
                     }
                     if (tasks.size() > 0) {
@@ -171,8 +170,11 @@ public class BoltExecutorPool {
         }
     }
 
-    public void submit(String threadName, BoltTask futureTask) throws InterruptedException {
-        taskQueues.get(threadName).put(futureTask);
+    public void submit(String threadName, BoltTask task) throws InterruptedException {
+        if (task.isNeedToRecord()) {
+            task.setThreadName(threadName);
+        }
+        taskQueues.get(threadName).put(task);
         int c = totalTaskCount.getAndIncrement();
         if (c == 0) {
             signalNotEmpty();

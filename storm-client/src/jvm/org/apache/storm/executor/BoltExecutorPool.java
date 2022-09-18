@@ -59,7 +59,7 @@ public class BoltExecutorPool {
     private final int maxTasks;
 
     public BoltExecutorPool() {
-        this(16, 1);
+        this(Runtime.getRuntime().availableProcessors(), 1);
     }
 
     public BoltExecutorPool(int coreThreads, int maxTasks) {

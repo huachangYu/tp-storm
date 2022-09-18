@@ -15,7 +15,7 @@ public class BoltExecutorMonitor {
     private AtomicLong totalTime = new AtomicLong(0);
     private ReentrantLock lock = new ReentrantLock();
     private double weight = 0.0;
-    private String strategy;
+    private String strategy = BoltWeightCalc.Strategy.QueueAndCost.name();
     protected BooleanSupplier sampler = ConfigUtils.evenSampler(10);
 
     public void record(long cost) {

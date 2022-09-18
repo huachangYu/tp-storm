@@ -35,7 +35,6 @@ public class BoltExecutorPool {
                         task.run();
                         if (task.isNeedToRecord()) {
                             task.getMonitor().record(task.getCost());
-                            task.printMetrics();
                         }
                     }
                     if (tasks.size() > 0) {
@@ -171,9 +170,6 @@ public class BoltExecutorPool {
     }
 
     public void submit(String threadName, BoltTask task) throws InterruptedException {
-        if (task.isNeedToRecord()) {
-            task.setThreadName(threadName);
-        }
         taskQueues.get(threadName).put(task);
         int c = totalTaskCount.getAndIncrement();
         if (c == 0) {

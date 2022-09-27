@@ -32,7 +32,6 @@ import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -318,7 +317,8 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
                 }
             };
             if (useThreadPool && receiveQueue.size() >= 10) {
-                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, monitor.checkSample()));
+                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, getName(),
+                        monitor.shouldRecordCost(), monitor.shouldRecordTaskInfo()));
             } else {
                 task.run();
             }

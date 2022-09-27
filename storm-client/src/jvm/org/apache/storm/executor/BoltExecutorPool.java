@@ -8,10 +8,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.executor.bolt.BoltExecutor;
+import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.ResizableLinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +26,11 @@ public class BoltExecutorPool implements Shutdownable {
 
     private class BoltWorker extends Thread {
         private boolean running;
+        private final BooleanSupplier sampler = ConfigUtils.evenSampler(1000);
 
         BoltWorker(String threadName) {
             super(threadName);
-            running = true;
+            this.running = true;
         }
 
         @Override
@@ -37,12 +40,18 @@ public class BoltExecutorPool implements Shutdownable {
                     List<BoltTask> tasks = getTask(maxTasks);
                     for (BoltTask task : tasks) {
                         task.run();
-                        if (task.isNeedToRecord()) {
+                        if (task.shouldRecordCost()) {
                             task.getMonitor().recordCost(task.getCost());
+                        }
+                        if (task.shouldRecordTaskInfo()) {
+                            task.getMonitor().recordTaskInfo(task, taskQueues.get(task.getThreadName()).size());
                         }
                     }
                     if (tasks.size() > 0) {
                         tasks.get(0).getMonitor().recordLastTime(System.currentTimeMillis());
+                    }
+                    if (sampler.getAsBoolean()) {
+                        optimize();
                     }
                 } catch (InterruptedException e) {
                     LOG.warn("error occurred when getting task. ex:{}", e.getMessage());
@@ -59,8 +68,8 @@ public class BoltExecutorPool implements Shutdownable {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition emptyThreadWait = lock.newCondition();
     private final Condition emptyQueueWait = lock.newCondition();
-    private final int coreThreads;
-    private final int maxThreads;
+    private final int coreWorkers;
+    private final int maxWorkers;
     private final List<BoltExecutor> threads = new ArrayList<>();
     private final AtomicInteger blockedWorkersNum = new AtomicInteger();
     private final List<BoltWorker> workers;
@@ -72,13 +81,13 @@ public class BoltExecutorPool implements Shutdownable {
         this(CPU_NUM, 2 * CPU_NUM, 1);
     }
 
-    public BoltExecutorPool(int coreThreads, int maxThreads, int maxTasks) {
-        this.coreThreads = coreThreads;
-        this.maxThreads = maxThreads;
-        this.taskQueues = new ConcurrentHashMap<>(coreThreads);
-        this.workers = new ArrayList<>(coreThreads);
+    public BoltExecutorPool(int coreWorkers, int maxWorkers, int maxTasks) {
+        this.coreWorkers = coreWorkers;
+        this.maxWorkers = maxWorkers;
+        this.taskQueues = new ConcurrentHashMap<>(coreWorkers);
+        this.workers = new ArrayList<>(coreWorkers);
         this.maxTasks = maxTasks;
-        while (workers.size() < coreThreads) {
+        while (workers.size() < coreWorkers) {
             addWorker();
         }
     }
@@ -184,11 +193,11 @@ public class BoltExecutorPool implements Shutdownable {
     public void submit(String threadName, BoltTask task) throws InterruptedException {
         taskQueues.get(threadName).put(task);
         if (blockedWorkersNum.get() > 0) {
-            signalNotEmpty();
+            signalQueueNotEmpty();
         }
     }
 
-    private void signalNotEmpty() {
+    private void signalQueueNotEmpty() {
         lock.lock();
         try {
             emptyQueueWait.signal();
@@ -200,12 +209,13 @@ public class BoltExecutorPool implements Shutdownable {
     private void addWorker() {
         lock.lock();
         try {
-            if (workers.size() < maxThreads) {
+            if (workers.size() < maxWorkers) {
                 BoltWorker worker = new BoltWorker("bolt-worker-" + workerIndex.getAndIncrement());
                 workers.add(worker);
                 worker.setPriority(Thread.MAX_PRIORITY);
                 worker.setDaemon(true);
                 worker.start();
+                System.out.println("add work...");
             }
         } finally {
             lock.unlock();
@@ -215,30 +225,46 @@ public class BoltExecutorPool implements Shutdownable {
     private void removeWorker() {
         lock.lock();
         try {
-            if (workers.size() > coreThreads) {
+            if (workers.size() > coreWorkers) {
                 BoltWorker worker = workers.remove(workers.size() - 1);
                 worker.close();
+                System.out.println("remove work...");
             }
         } finally {
             lock.unlock();
         }
     }
 
-    public void addConsumer() {
+    private void optimize() {
         lock.lock();
         try {
-            addWorker();
+            optimizeConsumer();
+            optimizeQueueSize();
         } finally {
             lock.unlock();
         }
     }
 
-    public void removeConsumer() {
-        lock.lock();
-        try {
-            removeWorker();
-        } finally {
-            lock.unlock();
+    // thread-unsafe
+    private void optimizeConsumer() {
+        if (workers.size() >= maxWorkers) {
+            return;
         }
+        int sumCapacity = 0;
+        int sumSize = 0;
+        for (ResizableLinkedBlockingQueue<BoltTask> queue : taskQueues.values()) {
+            sumCapacity += queue.getMaximumQueueSize();
+            sumSize += queue.size();
+        }
+        if (sumSize >= 0.8 * sumCapacity && workers.size() < maxWorkers) {
+            addWorker();
+        } else if (sumSize <= 0.1 * sumCapacity && workers.size() > coreWorkers) {
+            removeWorker();
+        }
+    }
+
+    // thread-unsafe
+    private void optimizeQueueSize() {
+
     }
 }

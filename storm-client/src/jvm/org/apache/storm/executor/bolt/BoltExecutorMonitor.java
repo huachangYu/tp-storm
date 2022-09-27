@@ -1,7 +1,8 @@
 package org.apache.storm.executor.bolt;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
@@ -10,25 +11,49 @@ import org.apache.storm.executor.BoltTask;
 import org.apache.storm.utils.ConfigUtils;
 
 public class BoltExecutorMonitor {
+    private static class BoltTaskInfo {
+        long currentTime;
+        int currentQueueSize;
+
+        BoltTaskInfo(long currentTime, int currentQueueSize) {
+            this.currentTime = currentTime;
+            this.currentQueueSize = currentQueueSize;
+        }
+    }
+
     private long lastTime = System.currentTimeMillis();
     private int windowsSize = 50;
-    private BlockingQueue<Long> costTimeQueue = new LinkedBlockingQueue<>();
-    private AtomicLong totalTime = new AtomicLong(0);
-    private ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock taskLock = new ReentrantLock();
+    private long timeSpan = 10 * 1000 * 10; // 10s
+    private int tasksMaxSize = 1000;
+    private final List<BoltTaskInfo> currentTaskInfos = new LinkedList<>();
+    private final ReentrantLock costLock = new ReentrantLock();
+    private final Queue<Long> costTimeQueue = new LinkedList<>();
+    private final AtomicLong totalTime = new AtomicLong(0);
     private double weight = 0.0;
     private String strategy = BoltWeightCalc.Strategy.QueueAndCost.name();
     protected BooleanSupplier costSampler = ConfigUtils.evenSampler(10);
     protected BooleanSupplier predictSampler = ConfigUtils.evenSampler(100);
 
-    public void record(BoltTask task) {
-
+    public void recordTaskInfo(BoltTask task, int queueSize) {
+        taskLock.lock();
+        try {
+            while (!currentTaskInfos.isEmpty()
+                    && (currentTaskInfos.size() >= tasksMaxSize
+                    || currentTaskInfos.get(0).currentTime < task.getStartTime() - timeSpan)) {
+                currentTaskInfos.remove(0);
+            }
+            currentTaskInfos.add(new BoltTaskInfo(task.getEndTime(), queueSize));
+        } finally {
+            taskLock.unlock();
+        }
     }
 
     public void recordCost(long cost) {
         if (cost < 0) {
             cost = 0;
         }
-        lock.lock();
+        costLock.lock();
         try {
             if (costTimeQueue.size() >= windowsSize) {
                 totalTime.addAndGet(-costTimeQueue.poll());
@@ -36,7 +61,7 @@ public class BoltExecutorMonitor {
             costTimeQueue.add(cost);
             totalTime.addAndGet(cost);
         } finally {
-            lock.unlock();
+            costLock.unlock();
         }
     }
 
@@ -109,19 +134,11 @@ public class BoltExecutorMonitor {
         return weight;
     }
 
-    public boolean checkSample() {
+    public boolean shouldRecordCost() {
         return costSampler.getAsBoolean();
     }
 
-    @Override
-    public String toString() {
-        return "BoltExecutorMonitor{"
-                + "lastTime=" + lastTime
-                + ", windowsSize=" + windowsSize
-                + ", costTimeQueue=" + costTimeQueue
-                + ", lock=" + lock
-                + ", weight=" + weight
-                + ", strategy='" + strategy + '\''
-                + '}';
+    public boolean shouldRecordTaskInfo() {
+        return predictSampler.getAsBoolean();
     }
 }

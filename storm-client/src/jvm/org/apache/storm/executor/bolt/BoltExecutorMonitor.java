@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 
+import org.apache.storm.executor.BoltTask;
 import org.apache.storm.utils.ConfigUtils;
 
 public class BoltExecutorMonitor {
@@ -16,9 +17,14 @@ public class BoltExecutorMonitor {
     private ReentrantLock lock = new ReentrantLock();
     private double weight = 0.0;
     private String strategy = BoltWeightCalc.Strategy.QueueAndCost.name();
-    protected BooleanSupplier sampler = ConfigUtils.evenSampler(10);
+    protected BooleanSupplier costSampler = ConfigUtils.evenSampler(10);
+    protected BooleanSupplier predictSampler = ConfigUtils.evenSampler(100);
 
-    public void record(long cost) {
+    public void record(BoltTask task) {
+
+    }
+
+    public void recordCost(long cost) {
         if (cost < 0) {
             cost = 0;
         }
@@ -104,7 +110,7 @@ public class BoltExecutorMonitor {
     }
 
     public boolean checkSample() {
-        return sampler.getAsBoolean();
+        return costSampler.getAsBoolean();
     }
 
     @Override

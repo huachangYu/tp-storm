@@ -3,27 +3,31 @@ package org.apache.storm.executor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.executor.bolt.BoltExecutor;
+import org.apache.storm.utils.ResizableLinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BoltExecutorPool {
+public class BoltExecutorPool implements Shutdownable {
     private static final Logger LOG = LoggerFactory.getLogger(BoltExecutorPool.class);
+    private static final int CPU_NUM = Runtime.getRuntime().availableProcessors();
     private static final double EPS = 1e-5;
-    private static final int MAX_QUEUE_CAPACITY = 100000;
+    private static final int DEFAULT_MAX_QUEUE_CAPACITY = 100000;
 
     private class BoltWorker extends Thread {
+        private boolean running;
+
         BoltWorker(String threadName) {
             super(threadName);
+            running = true;
         }
 
         @Override
@@ -34,7 +38,7 @@ public class BoltExecutorPool {
                     for (BoltTask task : tasks) {
                         task.run();
                         if (task.isNeedToRecord()) {
-                            task.getMonitor().record(task.getCost());
+                            task.getMonitor().recordCost(task.getCost());
                         }
                     }
                     if (tasks.size() > 0) {
@@ -44,6 +48,11 @@ public class BoltExecutorPool {
                     LOG.warn("error occurred when getting task. ex:{}", e.getMessage());
                 }
             }
+            LOG.info("bolt worker stopped");
+        }
+
+        public void close() {
+            running = false;
         }
     }
 
@@ -51,23 +60,23 @@ public class BoltExecutorPool {
     private final Condition emptyThreadWait = lock.newCondition();
     private final Condition emptyQueueWait = lock.newCondition();
     private final int coreThreads;
+    private final int maxThreads;
     private final List<BoltExecutor> threads = new ArrayList<>();
+    private final AtomicInteger blockedWorkersNum = new AtomicInteger();
     private final List<BoltWorker> workers;
-    private final ConcurrentHashMap<String, BlockingQueue<BoltTask>> taskQueues;
-    private final AtomicInteger totalTaskCount;
-    private boolean running; // to improve performance, don't use violate
+    private final AtomicInteger workerIndex = new AtomicInteger(0);
+    private final ConcurrentHashMap<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues;
     private final int maxTasks;
 
     public BoltExecutorPool() {
-        this(Runtime.getRuntime().availableProcessors(), 1);
+        this(CPU_NUM, 2 * CPU_NUM, 1);
     }
 
-    public BoltExecutorPool(int coreThreads, int maxTasks) {
+    public BoltExecutorPool(int coreThreads, int maxThreads, int maxTasks) {
         this.coreThreads = coreThreads;
+        this.maxThreads = maxThreads;
         this.taskQueues = new ConcurrentHashMap<>(coreThreads);
-        this.totalTaskCount = new AtomicInteger(0);
         this.workers = new ArrayList<>(coreThreads);
-        this.running = true;
         this.maxTasks = maxTasks;
         while (workers.size() < coreThreads) {
             addWorker();
@@ -77,10 +86,15 @@ public class BoltExecutorPool {
     public List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
         lock.lock();
         try {
+            while (threads.isEmpty()) {
+                emptyThreadWait.await();
+            }
             List<BoltExecutor> notEmptyThreads = threads.stream()
                     .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             while (notEmptyThreads.isEmpty()) {
+                blockedWorkersNum.getAndIncrement();
                 emptyQueueWait.await();
+                blockedWorkersNum.getAndDecrement();
                 notEmptyThreads = threads.stream()
                         .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
             }
@@ -121,7 +135,6 @@ public class BoltExecutorPool {
                     ThreadLocalRandom.current().nextInt(maxWeightBoltThreads.size())).getName());
             while (!queue.isEmpty() && tasks.size() < maxTaskSize) {
                 tasks.add(queue.remove());
-                totalTaskCount.getAndDecrement();
             }
             return tasks;
         } finally {
@@ -143,7 +156,7 @@ public class BoltExecutorPool {
                 return;
             }
             threads.add(thread);
-            taskQueues.put(threadName, new LinkedBlockingQueue<>(MAX_QUEUE_CAPACITY));
+            taskQueues.put(threadName, new ResizableLinkedBlockingQueue<>(DEFAULT_MAX_QUEUE_CAPACITY));
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -163,16 +176,14 @@ public class BoltExecutorPool {
     }
 
     public void shutdown() {
-        this.running = false;
         for (BoltWorker worker : workers) {
-            worker.interrupt();
+            worker.close();
         }
     }
 
     public void submit(String threadName, BoltTask task) throws InterruptedException {
         taskQueues.get(threadName).put(task);
-        int c = totalTaskCount.getAndIncrement();
-        if (c == 0) {
+        if (blockedWorkersNum.get() > 0) {
             signalNotEmpty();
         }
     }
@@ -189,13 +200,43 @@ public class BoltExecutorPool {
     private void addWorker() {
         lock.lock();
         try {
-            if (workers.size() < coreThreads) {
-                BoltWorker worker = new BoltWorker("bolt-worker-" + workers.size());
+            if (workers.size() < maxThreads) {
+                BoltWorker worker = new BoltWorker("bolt-worker-" + workerIndex.getAndIncrement());
                 workers.add(worker);
                 worker.setPriority(Thread.MAX_PRIORITY);
                 worker.setDaemon(true);
                 worker.start();
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void removeWorker() {
+        lock.lock();
+        try {
+            if (workers.size() > coreThreads) {
+                BoltWorker worker = workers.remove(workers.size() - 1);
+                worker.close();
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void addConsumer() {
+        lock.lock();
+        try {
+            addWorker();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void removeConsumer() {
+        lock.lock();
+        try {
+            removeWorker();
         } finally {
             lock.unlock();
         }

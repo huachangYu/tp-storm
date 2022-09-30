@@ -155,8 +155,8 @@ public class WorkerState {
     private final Collection<IAutoCredentials> autoCredentials;
     private final AtomicReference<Credentials> credentialsAtom;
     private final StormMetricRegistry metricRegistry;
-
     private BoltExecutorPool boltExecutorPool;
+    private SystemMonitor systemMonitor;
 
     public WorkerState(Map<String, Object> conf,
             IContext mqContext,
@@ -174,7 +174,7 @@ public class WorkerState {
             InvalidTopologyException {
         this.metricRegistry = metricRegistry;
         this.autoCredentials = autoCredentials;
-        this.credentialsAtom = new AtomicReference(initialCredentials);
+        this.credentialsAtom = new AtomicReference<>(initialCredentials);
         this.conf = conf;
         this.supervisorIfaceSupplier = supervisorIfaceSupplier;
         this.mqContext = (null != mqContext) ? mqContext :
@@ -249,11 +249,12 @@ public class WorkerState {
         };
         this.receiver = this.mqContext.bind(topologyId, port, cb, newConnectionResponse);
         boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
+        this.systemMonitor = new SystemMonitor();
         if (useThreadPool) {
             Long coreThreads = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS,
                     Runtime.getRuntime().availableProcessors());
             Long maxTasks = (Long)  topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, 1);
-            this.boltExecutorPool = new BoltExecutorPool(coreThreads.intValue(), 2 * coreThreads.intValue(), maxTasks.intValue());
+            this.boltExecutorPool = new BoltExecutorPool(systemMonitor, coreThreads.intValue(), 2 * coreThreads.intValue(), maxTasks.intValue());
         }
     }
 

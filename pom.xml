@@ -289,6 +289,7 @@
 
         <!-- dependency versions -->
         <clojure.version>1.10.0</clojure.version>
+        <oshi.version>6.2.2</oshi.version>
         <commons-compress.version>1.18</commons-compress.version>
         <commons-io.version>2.6</commons-io.version>
         <commons-lang.version>2.6</commons-lang.version>
@@ -758,6 +759,11 @@
                 <groupId>org.clojure</groupId>
                 <artifactId>clojure</artifactId>
                 <version>${clojure.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.oshi</groupId>
+                <artifactId>oshi-core</artifactId>
+                <version>${oshi.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.esotericsoftware</groupId>

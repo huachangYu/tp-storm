@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.FutureTask;
 import java.util.function.BooleanSupplier;
 import org.apache.storm.Config;
 import org.apache.storm.Constants;
@@ -26,7 +25,6 @@ import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
 import org.apache.storm.executor.BoltExecutorPool;
-import org.apache.storm.executor.BoltTask;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
@@ -79,7 +77,7 @@ public class BoltExecutor extends Executor {
         this.stats = new BoltExecutorStats(ConfigUtils.samplingRate(this.getTopoConf()),
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
         this.useThreadPool = false;
-        this.monitor = new BoltExecutorMonitor();
+        this.monitor = new BoltExecutorMonitor(workerData);
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {

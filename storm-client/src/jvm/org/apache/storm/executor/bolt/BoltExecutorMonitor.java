@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 
+import org.apache.storm.daemon.worker.WorkerState;
 import org.apache.storm.executor.BoltTask;
 import org.apache.storm.utils.ConfigUtils;
 
@@ -21,9 +22,10 @@ public class BoltExecutorMonitor {
         }
     }
 
+    private final WorkerState workerData;
     private long lastTime = System.currentTimeMillis();
     private int windowsSize = 50;
-    private final ReentrantLock taskLock = new ReentrantLock();
+    private final ReentrantLock taskInfoLock = new ReentrantLock();
     private long timeSpan = 10 * 1000 * 10; // 10s
     private int tasksMaxSize = 1000;
     private final List<BoltTaskInfo> currentTaskInfos = new LinkedList<>();
@@ -35,8 +37,12 @@ public class BoltExecutorMonitor {
     protected BooleanSupplier costSampler = ConfigUtils.evenSampler(10);
     protected BooleanSupplier predictSampler = ConfigUtils.evenSampler(100);
 
+    public BoltExecutorMonitor(WorkerState workerData) {
+        this.workerData = workerData;
+    }
+
     public void recordTaskInfo(BoltTask task, int queueSize) {
-        taskLock.lock();
+        taskInfoLock.lock();
         try {
             while (!currentTaskInfos.isEmpty()
                     && (currentTaskInfos.size() >= tasksMaxSize
@@ -45,7 +51,7 @@ public class BoltExecutorMonitor {
             }
             currentTaskInfos.add(new BoltTaskInfo(task.getEndTime(), queueSize));
         } finally {
-            taskLock.unlock();
+            taskInfoLock.unlock();
         }
     }
 

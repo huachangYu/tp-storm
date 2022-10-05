@@ -12,9 +12,17 @@ import org.apache.storm.executor.BoltTask;
 import org.apache.storm.utils.ConfigUtils;
 
 public class BoltExecutorMonitor {
-    private static class BoltTaskInfo {
+    public static class BoltTaskInfo {
         long currentTime;
         int currentQueueSize;
+
+        public long getCurrentTime() {
+            return currentTime;
+        }
+
+        public int getCurrentQueueSize() {
+            return currentQueueSize;
+        }
 
         BoltTaskInfo(long currentTime, int currentQueueSize) {
             this.currentTime = currentTime;
@@ -49,7 +57,11 @@ public class BoltExecutorMonitor {
                     || currentTaskInfos.get(0).currentTime < task.getStartTime() - timeSpan)) {
                 currentTaskInfos.remove(0);
             }
-            currentTaskInfos.add(new BoltTaskInfo(task.getEndTime(), queueSize));
+            BoltTaskInfo boltTaskInfo = new BoltTaskInfo(System.currentTimeMillis(), queueSize);
+            if (currentTaskInfos.isEmpty()
+                    || currentTaskInfos.get(currentTaskInfos.size() - 1).getCurrentTime() < boltTaskInfo.getCurrentTime()) {
+                currentTaskInfos.add(boltTaskInfo);
+            }
         } finally {
             taskInfoLock.unlock();
         }
@@ -96,33 +108,39 @@ public class BoltExecutorMonitor {
         return (double) totalTime.get() / (double) size;
     }
     
-    public double calculateWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
-                                double minAvgTime, double maxAvgTime,
-                                long minWeightTime, long maxWeightTime) {
+    public double updateWeight(long current, int queueSize, int queueCapacity,
+                               int minTaskQueueSize, int maxTaskQueueSize,
+                               double minAvgTime, double maxAvgTime,
+                               long minWeightTime, long maxWeightTime) {
         if (strategy == null
                 || strategy.length() == 0
                 || strategy.equals(BoltWeightCalc.Strategy.Fair.name())) {
-            this.weight = BoltWeightCalc.fair(taskQueueSize, getAvgTime(), getWaitingTime(current),
+            this.weight = BoltWeightCalc.fair(queueSize, queueCapacity,
+                    getAvgTime(), getWaitingTime(current),
                     minTaskQueueSize, maxTaskQueueSize,
                     minAvgTime, maxAvgTime,
                     minWeightTime, maxWeightTime);
         } else if (strategy.equals(BoltWeightCalc.Strategy.OnlyQueue.name())) {
-            this.weight = BoltWeightCalc.onlyQueue(taskQueueSize, getAvgTime(), getWaitingTime(current),
+            this.weight = BoltWeightCalc.onlyQueue(queueSize, queueCapacity,
+                    getAvgTime(), getWaitingTime(current),
                     minTaskQueueSize, maxTaskQueueSize,
                     minAvgTime, maxAvgTime,
                     minWeightTime, maxWeightTime);
         } else if (strategy.equals(BoltWeightCalc.Strategy.QueueAndCost.name())) {
-            this.weight = BoltWeightCalc.queueAndCost(taskQueueSize, getAvgTime(), getWaitingTime(current),
+            this.weight = BoltWeightCalc.queueAndCost(queueSize, queueCapacity,
+                    getAvgTime(), getWaitingTime(current),
                     minTaskQueueSize, maxTaskQueueSize,
                     minAvgTime, maxAvgTime,
                     minWeightTime, maxWeightTime);
         } else if (strategy.equals(BoltWeightCalc.Strategy.QueueAndWait.name())) {
-            this.weight = BoltWeightCalc.queueAndWait(taskQueueSize, getAvgTime(), getWaitingTime(current),
+            this.weight = BoltWeightCalc.queueAndWait(queueSize, queueCapacity,
+                    getAvgTime(), getWaitingTime(current),
                     minTaskQueueSize, maxTaskQueueSize,
                     minAvgTime, maxAvgTime,
                     minWeightTime, maxWeightTime);
         } else if (strategy.equals(BoltWeightCalc.Strategy.QueueAndCostAndWait.name())) {
-            this.weight = BoltWeightCalc.queueAndCostAndWait(taskQueueSize, getAvgTime(), getWaitingTime(current),
+            this.weight = BoltWeightCalc.queueAndCostAndWait(queueSize, queueCapacity,
+                    getAvgTime(), getWaitingTime(current),
                     minTaskQueueSize, maxTaskQueueSize,
                     minAvgTime, maxAvgTime,
                     minWeightTime, maxWeightTime);
@@ -138,6 +156,20 @@ public class BoltExecutorMonitor {
 
     public double getWeight() {
         return weight;
+    }
+
+    public List<BoltTaskInfo> getCurrentTaskInfos(long current) {
+        taskInfoLock.lock();
+        try {
+            while (!currentTaskInfos.isEmpty()
+                    && (currentTaskInfos.size() >= tasksMaxSize
+                    || currentTaskInfos.get(0).currentTime < current - timeSpan)) {
+                currentTaskInfos.remove(0);
+            }
+            return currentTaskInfos;
+        } finally {
+            taskInfoLock.unlock();
+        }
     }
 
     public boolean shouldRecordCost() {

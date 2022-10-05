@@ -257,11 +257,14 @@ public class BoltExecutor extends Executor {
         return monitor.getWeight();
     }
 
-    public double getLatestWeight(long current, int taskQueueSize, int minTaskQueueSize, int maxTaskQueueSize,
-                                   double minAvgTime, double maxAvgTime,
-                                   long minWaitingTime, long maxWaitingTime) {
-        monitor.calculateWeight(current, taskQueueSize, minTaskQueueSize, maxTaskQueueSize,
-                minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
+    public double getLatestWeight(long current, int taskQueueSize, int queueCapacity,
+                                  int minTaskQueueSize, int maxTaskQueueSize,
+                                  double minAvgTime, double maxAvgTime,
+                                  long minWaitingTime, long maxWaitingTime) {
+        monitor.updateWeight(current, taskQueueSize, queueCapacity,
+                minTaskQueueSize, maxTaskQueueSize,
+                minAvgTime, maxAvgTime,
+                minWaitingTime, maxWaitingTime);
         return monitor.getWeight();
     }
 

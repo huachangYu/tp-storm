@@ -85,7 +85,7 @@ public class WordCountTopology {
             }
             count += 1;
             counts.put(word, count);
-            // System.out.printf("word=%s, num=%d\n", word, count);
+            //System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -102,7 +102,7 @@ public class WordCountTopology {
         builder.setBolt("count", new WordCount(), 4).fieldsGrouping("split", new Fields("word"));
 
         Config conf = new Config();
-        // conf.setNumWorkers(2);
+        //conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
         conf.setBoltThreadPoolCoreThreads(4);
         conf.setTopologyBoltThreadPoolFetchMaxTasks(3);

@@ -5,6 +5,7 @@ import oshi.SystemInfo;
 import oshi.hardware.CentralProcessor;
 
 public class SystemMonitor {
+    public static final int CPU_CORE_NUM = Runtime.getRuntime().availableProcessors();
     private final ReentrantLock lock = new ReentrantLock();
     private final SystemInfo systemInfo;
     private final CentralProcessor systemInfoProcessor;

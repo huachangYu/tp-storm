@@ -1,7 +1,9 @@
 package org.apache.storm.executor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -11,9 +13,13 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
+import org.apache.storm.daemon.OverLoadChecker;
 import org.apache.storm.daemon.Shutdownable;
+import org.apache.storm.daemon.WorkerOptimizer;
 import org.apache.storm.daemon.worker.SystemMonitor;
 import org.apache.storm.executor.bolt.BoltExecutor;
+import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
+import org.apache.storm.shade.org.json.simple.JSONObject;
 import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.ResizableLinkedBlockingQueue;
 import org.slf4j.Logger;
@@ -21,13 +27,12 @@ import org.slf4j.LoggerFactory;
 
 public class BoltExecutorPool implements Shutdownable {
     private static final Logger LOG = LoggerFactory.getLogger(BoltExecutorPool.class);
-    private static final int CPU_NUM = Runtime.getRuntime().availableProcessors();
     private static final double EPS = 1e-5;
+    private static final int DEFAULT_MIN_QUEUE_CAPACITY = 10000;
     private static final int DEFAULT_MAX_QUEUE_CAPACITY = 100000;
 
     private class BoltConsumer extends Thread {
         private boolean running;
-        private final BooleanSupplier sampler = ConfigUtils.evenSampler(1000);
 
         BoltConsumer(String threadName) {
             super(threadName);
@@ -51,11 +56,8 @@ public class BoltExecutorPool implements Shutdownable {
                     if (tasks.size() > 0) {
                         tasks.get(0).getMonitor().recordLastTime(System.currentTimeMillis());
                     }
-                    if (autoOptimize && sampler.getAsBoolean()) {
-                        optimize();
-                    }
                 } catch (InterruptedException e) {
-                    LOG.warn("error occurred when getting task. ex:{}", e.getMessage());
+                    LOG.warn("error occurred when getting or running task. ex:{}", e.getMessage());
                 }
             }
             LOG.info("bolt consumer stopped");
@@ -67,32 +69,46 @@ public class BoltExecutorPool implements Shutdownable {
     }
 
     private final SystemMonitor systemMonitor;
+    private final String topologyId;
+    private final Map<String, Object> topologyConf;
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition emptyThreadWait = lock.newCondition();
     private final Condition emptyQueueWait = lock.newCondition();
     private final int coreConsumers;
     private final int maxConsumers;
-    private final List<BoltExecutor> threads = new ArrayList<>();
+    private final int maxWorkers; // max number of worker in Storm cluster.
+    private final List<BoltExecutor> bolts = new ArrayList<>();
     private final AtomicInteger blockedConsumerNum = new AtomicInteger();
     private final List<BoltConsumer> consumers;
     private final AtomicInteger consumerIndex = new AtomicInteger(0);
     private final ConcurrentHashMap<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues;
     private final int maxTasks;
-
     private final boolean autoOptimize;
+    private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(2000);
+    private WorkerOptimizer workerOptimizer;
+    private long lastTimeUpdateConsumer = System.currentTimeMillis();
+    private long timeIntervalUpdateConsumer = 5000;
 
-    public BoltExecutorPool(SystemMonitor systemMonitor) {
-        this(systemMonitor, CPU_NUM, 2 * CPU_NUM, 1, true);
+    public BoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
+        this(systemMonitor, topologyId, topologyConf, SystemMonitor.CPU_CORE_NUM,
+                2 * SystemMonitor.CPU_CORE_NUM, 1, 1, true);
     }
 
-    public BoltExecutorPool(SystemMonitor systemMonitor, int coreConsumers, int maxConsumers, int maxTasks) {
-        this(systemMonitor, coreConsumers, maxConsumers, maxTasks, true);
+    public BoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf,
+                            int coreConsumers, int maxConsumers, int maxWorkers, int maxTasks) {
+        this(systemMonitor, topologyId, topologyConf, coreConsumers, maxConsumers,
+                maxWorkers, maxTasks, true);
     }
 
-    public BoltExecutorPool(SystemMonitor systemMonitor, int coreConsumers, int maxConsumers, int maxTasks, boolean autoOptimize) {
+    public BoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf,
+                            int coreConsumers, int maxConsumers, int maxWorkers, int maxTasks,
+                            boolean autoOptimize) {
         this.systemMonitor = systemMonitor;
+        this.topologyId = topologyId;
+        this.topologyConf = topologyConf;
         this.coreConsumers = coreConsumers;
         this.maxConsumers = maxConsumers;
+        this.maxWorkers = maxWorkers;
         this.taskQueues = new ConcurrentHashMap<>(coreConsumers);
         this.consumers = new ArrayList<>(coreConsumers);
         this.maxTasks = maxTasks;
@@ -100,22 +116,25 @@ public class BoltExecutorPool implements Shutdownable {
         while (consumers.size() < coreConsumers) {
             addConsumer();
         }
+        startWorkerOptimizer();
     }
 
     public List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
         lock.lock();
         try {
-            while (threads.isEmpty()) {
+            while (bolts.isEmpty()) {
                 emptyThreadWait.await();
             }
-            List<BoltExecutor> notEmptyThreads = threads.stream()
-                    .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
+            List<BoltExecutor> notEmptyThreads = bolts.stream()
+                    .filter(t -> taskQueues.get(t.getName()).size() > 0)
+                    .collect(Collectors.toList());
             while (notEmptyThreads.isEmpty()) {
                 blockedConsumerNum.getAndIncrement();
                 emptyQueueWait.await();
                 blockedConsumerNum.getAndDecrement();
-                notEmptyThreads = threads.stream()
-                        .filter(t -> taskQueues.get(t.getName()).size() > 0).collect(Collectors.toList());
+                notEmptyThreads = bolts.stream()
+                        .filter(t -> taskQueues.get(t.getName()).size() > 0)
+                        .collect(Collectors.toList());
             }
 
             final long current = System.currentTimeMillis();
@@ -139,8 +158,12 @@ public class BoltExecutorPool implements Shutdownable {
             }
             double maxWeight = 0.0;
             for (BoltExecutor boltExecutor : notEmptyThreads) {
-                double weight = boltExecutor.getMonitor().calculateWeight(current, taskQueues.get(boltExecutor.getName()).size(),
-                        minTaskQueueSize, maxTaskQueueSize, minAvgTime, maxAvgTime, minWaitingTime, maxWaitingTime);
+                ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(boltExecutor.getName());
+                double weight = boltExecutor.getMonitor().updateWeight(
+                        current, queue.size(), queue.getMaximumQueueSize(),
+                        minTaskQueueSize, maxTaskQueueSize,
+                        minAvgTime, maxAvgTime,
+                        minWaitingTime, maxWaitingTime);
                 maxWeight = Math.max(maxWeight, weight);
             }
             List<BoltTask> tasks = new ArrayList<>();
@@ -154,6 +177,9 @@ public class BoltExecutorPool implements Shutdownable {
                     ThreadLocalRandom.current().nextInt(maxWeightBoltThreads.size())).getName());
             while (!queue.isEmpty() && tasks.size() < maxTaskSize) {
                 tasks.add(queue.remove());
+            }
+            if (autoOptimize && optimizeSample.getAsBoolean()) {
+                optimize(current);
             }
             return tasks;
         } finally {
@@ -174,8 +200,8 @@ public class BoltExecutorPool implements Shutdownable {
             if (taskQueues.containsKey(threadName)) {
                 return;
             }
-            threads.add(thread);
-            taskQueues.put(threadName, new ResizableLinkedBlockingQueue<>(DEFAULT_MAX_QUEUE_CAPACITY));
+            bolts.add(thread);
+            taskQueues.put(threadName, new ResizableLinkedBlockingQueue<>(DEFAULT_MIN_QUEUE_CAPACITY));
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -188,13 +214,14 @@ public class BoltExecutorPool implements Shutdownable {
         lock.lock();
         try {
             taskQueues.remove(threadName);
-            threads.removeIf(t -> t.getName().equals(threadName));
+            bolts.removeIf(t -> t.getName().equals(threadName));
         } finally {
             lock.unlock();
         }
     }
 
     public void shutdown() {
+        this.workerOptimizer.shutdown();
         for (BoltConsumer consumer : consumers) {
             consumer.close();
         }
@@ -245,49 +272,73 @@ public class BoltExecutorPool implements Shutdownable {
         }
     }
 
-    private void optimize() {
+    private void optimize(long current) {
         lock.lock();
         try {
-            optimizeConsumer();
-            optimizeQueueSize();
-            optimizeWorkers();
+            optimizeConsumer(current);
+            optimizeQueueSize(current);
         } finally {
             lock.unlock();
         }
     }
 
     // thread-unsafe
-    private void optimizeConsumer() {
-        if (consumers.size() >= maxConsumers) {
+    private void optimizeConsumer(long current) {
+        if (consumers.size() >= maxConsumers || current < lastTimeUpdateConsumer + timeIntervalUpdateConsumer) {
             return;
         }
-        int sumCapacity = 0;
-        int sumSize = 0;
-        for (ResizableLinkedBlockingQueue<BoltTask> queue : taskQueues.values()) {
-            sumCapacity += queue.getMaximumQueueSize();
-            sumSize += queue.size();
-        }
+        int sumCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getMaximumQueueSize).sum();
+        int sumSize = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).sum();
         double cpuUsage = systemMonitor.getAvgCpuUsage();
-        System.out.println("cpu usage in 1s = " + cpuUsage);
         if (sumSize >= 0.8 * sumCapacity && cpuUsage > 0 && cpuUsage < 0.7) {
             addConsumer();
+            lastTimeUpdateConsumer = current;
+            LOG.info("optimize consumer. Added a new consumer");
         } else if (sumSize <= 0.1 * sumCapacity && consumers.size() > coreConsumers) {
             removeConsumer();
+            lastTimeUpdateConsumer = current;
+            LOG.info("optimize consumer. Removed a consumer");
         }
     }
 
     // thread-unsafe
-    private void optimizeQueueSize() {
-        int remainCapacity = BoltExecutorOptimizerUtil.getRemainCapacityBaseOnMemory();
-        if (remainCapacity <= 0) {
+    private void optimizeQueueSize(long current) {
+        Map<String, Integer> increase = BoltExecutorOptimizerUtil.getIncreaseBaseOnArima(taskQueues, bolts,
+                DEFAULT_MIN_QUEUE_CAPACITY, DEFAULT_MAX_QUEUE_CAPACITY, current);
+        if (increase.size() == 0) {
             return;
         }
-        System.out.println("optimize queue size...");
+        for (String queueName : increase.keySet()) {
+            ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+            queue.resizeQueue(queue.getMaximumQueueSize() + increase.get(queueName));
+        }
+        int[] queueCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getMaximumQueueSize).toArray();
+        int[] queueSizes = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).toArray();
+        LOG.info("optimize queue size. diff={}. new capacity={}. size={}.",
+                JSONObject.toJSONString(increase), Arrays.toString(queueCapacity),
+                Arrays.toString(queueSizes));
     }
 
-    // thread-unsafe
-    private void optimizeWorkers() {
-        System.out.println("optimize workers...");
-
+    private void startWorkerOptimizer() {
+        String[] parts = topologyId.split("-");
+        if (parts.length < 3) {
+            return;
+        }
+        String topologyName = StringUtils.join(Arrays.copyOfRange(parts, 0, parts.length - 2), "-");
+        this.workerOptimizer = new WorkerOptimizer(topologyName, topologyConf, maxWorkers, new OverLoadChecker() {
+            @Override
+            public boolean isOverLoad() {
+                lock.lock();
+                try {
+                    int sumCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getMaximumQueueSize).sum();
+                    int sumSize = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).sum();
+                    //TODO add cpu usage?
+                    return sumSize >= 0.9 * sumCapacity;
+                } finally {
+                    lock.unlock();
+                }
+            }
+        });
+        this.workerOptimizer.start();
     }
 }

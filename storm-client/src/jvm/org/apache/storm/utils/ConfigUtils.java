@@ -197,6 +197,21 @@ public class ConfigUtils {
         };
     }
 
+    public static BooleanSupplier sequenceSample(final int sequenceFreq) {
+        return new BooleanSupplier() {
+            private final int target = sequenceFreq;
+            private int cur = 0;
+            @Override
+            public boolean getAsBoolean() {
+                if (++cur == target) {
+                    cur = 0;
+                    return true;
+                }
+                return false;
+            }
+        };
+    }
+
     public static StormTopology readSupervisorTopology(Map<String, Object> conf, String stormId, AdvancedFSOps ops) throws IOException {
         return instance.readSupervisorTopologyImpl(conf, stormId, ops);
     }

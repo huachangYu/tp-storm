@@ -22,11 +22,9 @@ import com.esotericsoftware.kryo.Serializer;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.storm.executor.bolt.BoltWeightCalc;
 import org.apache.storm.metric.IEventLogger;
@@ -204,7 +202,11 @@ public class Config extends HashMap<String, Object> {
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS = "topology.bolt.threadpool.core.threads";
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_CONSUMERS = "topology.bolt.threadpool.core.consumers";
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS = "topology.bolt.threadpool.max.consumers";
 
     @IsBoolean
     public static final String TOPOLOGY_USE_BOLT_THREAD_POOL = "topology.bolt.threadpool.on";
@@ -213,10 +215,32 @@ public class Config extends HashMap<String, Object> {
     public static final String TOPOLOGY_BOLT_THREAD_POOL_STRATEGY = "topology.bolt.threadpool.strategy";
 
     @IsStringList
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_IDS = "topology.bolt.in.threadpool.ids";
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_IDS = "topology.bolt.threadpool.ids";
 
+    @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS = "topology.bolt.in.threadpool.fetch.max.tasks";
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS = "topology.bolt.threadpool.fetch.max.tasks";
+
+    @IsBoolean
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE = "topology.bolt.threadpool.optimize";
+
+    @IsBoolean
+    public static final String TOPOLOGY_ENABLE_WORKERS_OPTIMIZE = "topology.enable.workers.optimize";
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_MIN_QUEUE_CAPACITY = "topology.bolt.threadpool.min.queue.capacity";
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_QUEUE_CAPACITY = "topology.bolt.threadpool.max.queue.capacity";
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY = "topology.bolt.threadpool.total.queue.capacity";
+
+    @IsInteger
+    @IsPositiveNumber
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM = "topology.bolt.threadpool.max.worker.num";
 
     /**
      * How many instances to create for a spout/bolt. A task runs on a thread with zero or more other tasks for the same spout/bolt. The
@@ -1872,8 +1896,8 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
-    public static void setBoltThreadPoolCoreThreads(Map<String, Object> conf, int coreNum) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_THREADS, coreNum);
+    public static void setBoltThreadPoolCoreConsumers(Map<String, Object> conf, int coreNum) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_CONSUMERS, coreNum);
     }
 
     public static void setTopologyUseBoltThreadPool(Map<String, Object> conf, boolean isOn) {
@@ -1908,6 +1932,62 @@ public class Config extends HashMap<String, Object> {
 
     public void setTopologyBoltThreadPoolFetchMaxTasks(int maxTasks) {
         setTopologyBoltThreadPoolFetchMaxTasks(this, maxTasks);
+    }
+
+    public static void setTopologyBoltThreadPoolOptimize(Map<String, Object> conf, boolean on) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, on);
+    }
+
+    public void enableBoltThreadPoolOptimize(boolean on) {
+        setTopologyBoltThreadPoolOptimize(this, on);
+    }
+
+    public static void setTopologyEnableWorkersOptimize(Map<String, Object> conf, boolean on) {
+        conf.put(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, on);
+    }
+
+    public void enableWorkersOptimize(boolean on) {
+        setTopologyEnableWorkersOptimize(this, on);
+    }
+
+    public static void setTopologyBoltThreadPoolMaxConsumers(Map<String, Object> conf, int maxConsumers) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS, maxConsumers);
+    }
+
+    public void setTopologyBoltThreadPoolMaxConsumers(int maxConsumers) {
+        setTopologyBoltThreadPoolMaxConsumers(this, maxConsumers);
+    }
+
+    public static void setTopologyBoltThreadPoolMinQueueCapacity(Map<String, Object> conf, int minCapacity) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MIN_QUEUE_CAPACITY, minCapacity);
+    }
+
+    public void setTopologyBoltThreadPoolMinQueueCapacity(int minCapacity) {
+        setTopologyBoltThreadPoolMinQueueCapacity(this, minCapacity);
+    }
+
+    public static void setTopologyBoltThreadPoolMaxQueueCapacity(Map<String, Object> conf, int maxCapacity) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_QUEUE_CAPACITY, maxCapacity);
+    }
+
+    public void setTopologyBoltThreadPoolMaxQueueCapacity(int maxCapacity) {
+        setTopologyBoltThreadPoolMaxQueueCapacity(this, maxCapacity);
+    }
+
+    public static void setTopologyBoltThreadPoolTotalQueueCapacity(Map<String, Object> conf, int totalCapacity) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY, totalCapacity);
+    }
+
+    public void setTopologyBoltThreadPoolTotalQueueCapacity(int totalCapacity) {
+        setTopologyBoltThreadPoolTotalQueueCapacity(this, totalCapacity);
+    }
+
+    public static void setTopologyBoltThreadPoolMaxWorkerNum(Map<String, Object> conf, int maxWorkerNum) {
+        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM, maxWorkerNum);
+    }
+
+    public void setTopologyBoltThreadPoolMaxWorkerNum(int maxWorkerNum) {
+        setTopologyBoltThreadPoolMaxWorkerNum(this, maxWorkerNum);
     }
 
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
@@ -2047,8 +2127,8 @@ public class Config extends HashMap<String, Object> {
         setNumWorkers(this, workers);
     }
 
-    public void setBoltThreadPoolCoreThreads(int coreNum) {
-        setBoltThreadPoolCoreThreads(this, coreNum);
+    public void setBoltThreadPoolCoreConsumers(int coreNum) {
+        setBoltThreadPoolCoreConsumers(this, coreNum);
     }
 
     public void useBoltThreadPool(boolean isOn) {

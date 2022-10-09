@@ -20,7 +20,7 @@ public class WorkerOptimizer {
     private final Map<String, Object> topologyConf;
     private final int maxWorkers;
     private final long timeInterval = 10;
-    private final long optimizeTimeInterval = 10 * 1000; //TODO change it to 2 minutes
+    private final long optimizeTimeInterval = 120 * 1000; //TODO change it to 2 minutes
     private final long sampleTimes = optimizeTimeInterval / timeInterval;
     private long lastOptimizeTime = System.currentTimeMillis();
     private final Queue<Long> overloadTimes = new LinkedList<>();
@@ -44,12 +44,9 @@ public class WorkerOptimizer {
         rebalanceOptions.set_num_workers(newWorkerNum);
         LOG.info("Set number of workers of topology {} to {}", topologyName, newWorkerNum);
         try {
-            NimbusClient.withConfiguredClient(new NimbusClient.WithNimbus() {
-                @Override
-                public void run(Nimbus.Iface nimbus) throws Exception {
-                    nimbus.rebalance(topologyName, rebalanceOptions);
-                    LOG.info("Topology {} is rebalancing", topologyName);
-                }
+            NimbusClient.withConfiguredClient(nimbus -> {
+                nimbus.rebalance(topologyName, rebalanceOptions);
+                LOG.info("Topology {} is rebalancing", topologyName);
             });
         } catch (Exception e) {
             LOG.error("failed to rebalance the topology");

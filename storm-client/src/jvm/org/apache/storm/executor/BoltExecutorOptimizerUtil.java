@@ -48,15 +48,11 @@ public class BoltExecutorOptimizerUtil {
     public static Map<String, Integer> getIncreaseBaseOnArima(Map<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues,
                                                               List<BoltExecutor> bolts,
                                                               int minCapacity,
-                                                              int maxCapacity,
                                                               long currentTime) {
         Map<String, Integer> increase = new HashMap<>();
         int remainCapacity = MAX_TOTAL_CAPACITY == -1 ? getRemainCapacityBaseOnMemory() :
                 Math.max(0, MAX_TOTAL_CAPACITY - taskQueues.values().stream()
                         .mapToInt(ResizableLinkedBlockingQueue::getMaximumQueueSize).sum());
-        if (remainCapacity <= 0) {
-            return increase;
-        }
         Set<String> ignoreQueueNames = new HashSet<>();
         for (String queueName : taskQueues.keySet()) {
             ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
@@ -66,13 +62,17 @@ public class BoltExecutorOptimizerUtil {
             if (queue.size() < 0.5 * queue.getMaximumQueueSize()) {
                 ignoreQueueNames.add(queueName);
                 int desc = Math.min(queue.size() - minCapacity, (int) (0.1 * queue.getMaximumQueueSize()));
-                remainCapacity += desc;
-                increase.put(queueName, -desc);
+                if (desc > 0) {
+                    remainCapacity += desc;
+                    increase.put(queueName, -desc);
+                }
             } else if (queue.size() >= 0.9 * queue.getMaximumQueueSize()) {
                 ignoreQueueNames.add(queueName);
                 int incr = Math.min(remainCapacity, (int) (0.1 * queue.getMaximumQueueSize()));
-                remainCapacity -= incr;
-                increase.put(queueName, incr);
+                if (incr > 0) {
+                    remainCapacity -= incr;
+                    increase.put(queueName, incr);
+                }
             }
         }
         if (remainCapacity <= 0) {

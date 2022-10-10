@@ -113,8 +113,8 @@ public class BoltExecutorPool implements Shutdownable {
         this.taskQueues = new ConcurrentHashMap<>(coreConsumers);
         this.consumers = new ArrayList<>(coreConsumers);
         this.maxTasks = maxTasks;
-        this.optimizePool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, false);
-        this.optimizeWorker = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, false);
+        this.optimizePool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, true);
+        this.optimizeWorker = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, true);
         if (this.optimizePool && topologyConf.containsKey(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY)) {
             long totalCapacity = (Long) topologyConf.get(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY);
             BoltExecutorOptimizerUtil.setMaxTotalCapacity((int) totalCapacity);
@@ -312,7 +312,7 @@ public class BoltExecutorPool implements Shutdownable {
     // thread-unsafe
     private void optimizeQueueSize(long current) {
         Map<String, Integer> increase = BoltExecutorOptimizerUtil.getIncreaseBaseOnArima(taskQueues, bolts,
-                minQueueCapacity, maxQueueCapacity, current);
+                minQueueCapacity, current);
         if (increase.size() == 0) {
             return;
         }

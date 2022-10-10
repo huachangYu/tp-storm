@@ -21,9 +21,9 @@ public class WorkerOptimizer {
     private final int maxWorkers;
     private final long timeInterval = 10;
     private final long optimizeTimeInterval = 120 * 1000; //TODO change it to 2 minutes
-    private final long sampleTimes = optimizeTimeInterval / timeInterval;
-    private long lastOptimizeTime = System.currentTimeMillis();
+    private long lastOptimizeTime = -1;
     private final Queue<Long> overloadTimes = new LinkedList<>();
+    private final Queue<Long> normalTimes = new LinkedList<>();
     private final OverLoadChecker checker;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
@@ -61,13 +61,21 @@ public class WorkerOptimizer {
                 overloadTimes.add(current);
             } else {
                 current = System.currentTimeMillis();
+                normalTimes.add(current);
+            }
+            if (lastOptimizeTime <= 0) {
+                lastOptimizeTime = current;
             }
             while (!overloadTimes.isEmpty() && overloadTimes.peek() + optimizeTimeInterval < current) {
                 overloadTimes.remove();
             }
-            if (overloadTimes.size() > 0.8 * sampleTimes && current > lastOptimizeTime + timeInterval) {
+            while (!normalTimes.isEmpty() && normalTimes.peek() + optimizeTimeInterval < current) {
+                normalTimes.remove();
+            }
+            if (overloadTimes.size() > 3 * normalTimes.size() && current > lastOptimizeTime + optimizeTimeInterval) {
                 optimize();
                 overloadTimes.clear();
+                normalTimes.clear();
                 lastOptimizeTime = current;
             }
         }, timeInterval, timeInterval, TimeUnit.MILLISECONDS);

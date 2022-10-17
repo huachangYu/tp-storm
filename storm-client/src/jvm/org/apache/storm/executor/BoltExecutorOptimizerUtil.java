@@ -59,16 +59,16 @@ public class BoltExecutorOptimizerUtil {
             if (queue.getMaximumQueueSize() <= minCapacity) {
                 continue;
             }
-            if (queue.size() < 0.5 * queue.getMaximumQueueSize()) {
+            if (queue.size() < 0.25 * queue.getMaximumQueueSize()) {
                 ignoreQueueNames.add(queueName);
-                int desc = Math.min(queue.size() - minCapacity, (int) (0.1 * queue.getMaximumQueueSize()));
+                int desc = Math.min(queue.getMaximumQueueSize() - minCapacity, (int) (0.25 * queue.getMaximumQueueSize()));
                 if (desc > 0) {
                     remainCapacity += desc;
                     increase.put(queueName, -desc);
                 }
             } else if (queue.size() >= 0.9 * queue.getMaximumQueueSize()) {
                 ignoreQueueNames.add(queueName);
-                int incr = Math.min(remainCapacity, (int) (0.1 * queue.getMaximumQueueSize()));
+                int incr = Math.min(remainCapacity, (int) (0.25 * queue.getMaximumQueueSize()));
                 if (incr > 0) {
                     remainCapacity -= incr;
                     increase.put(queueName, incr);

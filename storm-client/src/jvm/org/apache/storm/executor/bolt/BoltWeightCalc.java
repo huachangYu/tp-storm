@@ -6,6 +6,7 @@ public class BoltWeightCalc {
     }
 
     private static final double EPS = 1e-5;
+    private static final double SMALL = 1e-3;
     private static final int INF = 1000000000;
 
     public static double fair(int queueSize, int queueCapacity, double avgTime, long waitingTime,
@@ -41,9 +42,9 @@ public class BoltWeightCalc {
                                              int minTaskQueueSize, int maxTaskQueueSize,
                                              double minAvgTime, double maxAvgTime,
                                              long minWaitingTime, long maxWaitingTime) {
-        double stdWaitingTime = (double) waitingTime / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
-        double stdAvgTime = avgTime / Math.max(maxAvgTime - minAvgTime, 1);
-        return queueSize * (1 + stdWaitingTime / Math.max(stdAvgTime, 0.001));
+        double stdWaitingTime = (double) (waitingTime - minWaitingTime) / (double) Math.max(maxWaitingTime - minWaitingTime, 1);
+        double stdAvgTime = (avgTime - minAvgTime) / Math.max(maxAvgTime - minAvgTime, SMALL);
+        return queueSize * (1 + stdWaitingTime / Math.max(stdAvgTime, SMALL));
     }
 
 }

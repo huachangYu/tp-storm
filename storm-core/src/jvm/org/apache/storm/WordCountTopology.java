@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
+import org.apache.storm.executor.bolt.BoltWeightCalc;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -85,7 +86,7 @@ public class WordCountTopology {
             }
             count += 1;
             counts.put(word, count);
-            //System.out.printf("word=%s, num=%d\n", word, count);
+            System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -106,7 +107,7 @@ public class WordCountTopology {
         conf.useBoltThreadPool(true);
         conf.setBoltThreadPoolCoreConsumers(4);
         conf.setTopologyBoltThreadPoolFetchMaxTasks(3);
-        conf.setTopologyBoltThreadPoolStrategy("OnlyQueue");
+        conf.setTopologyBoltThreadPoolStrategy(BoltWeightCalc.Strategy.QueueAndCostAndWait.name());
         conf.setTopologyBoltThreadPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
         conf.enableBoltThreadPoolOptimize(true);

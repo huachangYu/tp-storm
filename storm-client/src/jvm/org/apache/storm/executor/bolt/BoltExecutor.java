@@ -24,7 +24,7 @@ import org.apache.storm.ICredentialsListener;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
-import org.apache.storm.executor.BoltExecutorPool;
+import org.apache.storm.executor.ScheduledBoltExecutorPool;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
@@ -233,7 +233,7 @@ public class BoltExecutor extends Executor {
         }
     }
 
-    public void initBoltThreadPool(BoltExecutorPool boltExecutorPool) {
+    public void initBoltThreadPool(ScheduledBoltExecutorPool boltExecutorPool) {
         this.useThreadPool = boltExecutorPool != null;
         this.boltExecutorPool = boltExecutorPool;
         this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,

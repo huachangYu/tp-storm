@@ -42,7 +42,7 @@ import org.apache.storm.cluster.VersionedData;
 import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.supervisor.AdvancedFSOps;
 import org.apache.storm.daemon.worker.BackPressureTracker.BackpressureState;
-import org.apache.storm.executor.BoltExecutorPool;
+import org.apache.storm.executor.ScheduledBoltExecutorPool;
 import org.apache.storm.executor.IRunningExecutor;
 import org.apache.storm.generated.Assignment;
 import org.apache.storm.generated.Credentials;
@@ -155,7 +155,7 @@ public class WorkerState {
     private final Collection<IAutoCredentials> autoCredentials;
     private final AtomicReference<Credentials> credentialsAtom;
     private final StormMetricRegistry metricRegistry;
-    private BoltExecutorPool boltExecutorPool;
+    private ScheduledBoltExecutorPool boltExecutorPool;
     private SystemMonitor systemMonitor;
 
     public WorkerState(Map<String, Object> conf,
@@ -256,7 +256,7 @@ public class WorkerState {
             long maxConsumers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS, coreConsumers);
             long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM, 1L);
             long maxTasks = (Long)  topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, 1L);
-            this.boltExecutorPool = new BoltExecutorPool(systemMonitor, topologyId, topologyConf,
+            this.boltExecutorPool = new ScheduledBoltExecutorPool(systemMonitor, topologyId, topologyConf,
                     (int) coreConsumers, (int) maxConsumers, (int) maxWorkers, (int) maxTasks);
         }
     }
@@ -279,7 +279,7 @@ public class WorkerState {
         return maxTaskId;
     }
 
-    public BoltExecutorPool getBoltExecutorPool() {
+    public ScheduledBoltExecutorPool getBoltExecutorPool() {
         return boltExecutorPool;
     }
 

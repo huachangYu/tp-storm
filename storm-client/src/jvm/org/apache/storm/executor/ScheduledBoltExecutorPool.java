@@ -26,8 +26,8 @@ import org.apache.storm.utils.ResizableLinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BoltExecutorPool implements Shutdownable {
-    private static final Logger LOG = LoggerFactory.getLogger(BoltExecutorPool.class);
+public class ScheduledBoltExecutorPool implements Shutdownable {
+    private static final Logger LOG = LoggerFactory.getLogger(ScheduledBoltExecutorPool.class);
     private static final double EPS = 1e-5;
 
     private class BoltConsumer extends Thread {
@@ -93,13 +93,13 @@ public class BoltExecutorPool implements Shutdownable {
     private final boolean optimizePool;
     private final boolean optimizeWorker;
 
-    public BoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
+    public ScheduledBoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
         this(systemMonitor, topologyId, topologyConf, SystemMonitor.CPU_CORE_NUM,
                 2 * SystemMonitor.CPU_CORE_NUM, 1, 1);
     }
 
-    public BoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf,
-                            int coreConsumers, int maxConsumers, int maxWorkers, int maxTasks) {
+    public ScheduledBoltExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf,
+                                     int coreConsumers, int maxConsumers, int maxWorkers, int maxTasks) {
         this.systemMonitor = systemMonitor;
         this.topologyId = topologyId;
         this.topologyConf = topologyConf;
@@ -127,7 +127,7 @@ public class BoltExecutorPool implements Shutdownable {
         }
     }
 
-    public List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
+    private List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
         lock.lock();
         try {
             while (bolts.isEmpty()) {
@@ -192,12 +192,6 @@ public class BoltExecutorPool implements Shutdownable {
             return tasks;
         } finally {
             lock.unlock();
-        }
-    }
-
-    public void addThreads(List<BoltExecutor> threads) {
-        for (BoltExecutor thread : threads) {
-            addThread(thread);
         }
     }
 

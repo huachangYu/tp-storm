@@ -23,7 +23,7 @@ public class BoltExecutorOptimizerUtil {
     }
 
     public static int getRemainCapacityBaseOnMemory() {
-        // must be bigger than sizeof(BoltTask)
+        // should be bigger than sizeof(BoltTask)
         final long itemSize = 80;
         //leave 1GB of memory for OS
         final long freeMem = Runtime.getRuntime().freeMemory() - (long) (1.5 * 1024 * 1024);
@@ -42,33 +42,33 @@ public class BoltExecutorOptimizerUtil {
         }
         double[] trainY = data.stream().mapToDouble(t -> t).toArray();
         TimeSeries series = TimeSeries.from(trainY);
-        return Arima.model(series, ArimaOrder.order(2, 1, 1));
+        return Arima.model(series, ArimaOrder.order(2, 1, 2));
     }
 
     public static Map<String, Integer> getIncreaseBaseOnArima(Map<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues,
                                                               List<BoltExecutor> bolts,
                                                               int minCapacity,
-                                                              long currentTime) {
+                                                              long currentTimeNs) {
         Map<String, Integer> increase = new HashMap<>();
         int remainCapacity = MAX_TOTAL_CAPACITY == -1 ? getRemainCapacityBaseOnMemory() :
                 Math.max(0, MAX_TOTAL_CAPACITY - taskQueues.values().stream()
-                        .mapToInt(ResizableLinkedBlockingQueue::getMaximumQueueSize).sum());
+                        .mapToInt(ResizableLinkedBlockingQueue::getCapacity).sum());
         Set<String> ignoreQueueNames = new HashSet<>();
         for (String queueName : taskQueues.keySet()) {
             ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
-            if (queue.getMaximumQueueSize() <= minCapacity) {
+            if (queue.getCapacity() <= minCapacity) {
                 continue;
             }
-            if (queue.size() < 0.25 * queue.getMaximumQueueSize()) {
+            if (queue.size() < 0.25 * queue.getCapacity()) {
                 ignoreQueueNames.add(queueName);
-                int desc = Math.min(queue.getMaximumQueueSize() - minCapacity, (int) (0.25 * queue.getMaximumQueueSize()));
+                int desc = Math.min(queue.getCapacity() - minCapacity, (int) (0.25 * queue.getCapacity()));
                 if (desc > 0) {
                     remainCapacity += desc;
                     increase.put(queueName, -desc);
                 }
-            } else if (queue.size() >= 0.9 * queue.getMaximumQueueSize()) {
+            } else if (queue.size() >= 0.9 * queue.getCapacity()) {
                 ignoreQueueNames.add(queueName);
-                int incr = Math.min(remainCapacity, (int) (0.25 * queue.getMaximumQueueSize()));
+                int incr = Math.min(remainCapacity, (int) (0.25 * queue.getCapacity()));
                 if (incr > 0) {
                     remainCapacity -= incr;
                     increase.put(queueName, incr);
@@ -80,25 +80,25 @@ public class BoltExecutorOptimizerUtil {
         }
         Map<String, Double> starts = new HashMap<>();
         Map<String, double[]> preds = new HashMap<>();
-        final double delta = 5;
-        final long maxTime = currentTime + 1000;
+        final double delta = 5 * 1000 * 1000; // 5ms
+        final long maxTime = currentTimeNs + 1000 * 1000 * 1000; //current + 1000ms
         for (BoltExecutor bolt : bolts) {
             String queueName = bolt.getName();
             if (ignoreQueueNames.contains(queueName)) {
                 continue;
             }
             ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
-            if (queue.remainingCapacity() < 0.1 * queue.getMaximumQueueSize()) {
-                int incr =  (int) (0.1 * queue.getMaximumQueueSize());
+            if (queue.remainingCapacity() < 0.1 * queue.getCapacity()) {
+                int incr =  (int) (0.1 * queue.getCapacity());
                 increase.put(queueName, incr);
                 remainCapacity -= incr;
                 ignoreQueueNames.add(queueName);
                 continue;
             }
-            List<BoltExecutorMonitor.BoltTaskInfo> taskInfos = bolt.getMonitor().getCurrentTaskInfos(currentTime);
-            double[] x = taskInfos.stream().mapToDouble(t -> (double) t.getCurrentTime()).toArray();
+            List<BoltExecutorMonitor.BoltTaskInfo> taskInfos = bolt.getMonitor().getCurrentTaskInfos(currentTimeNs);
+            double[] x = taskInfos.stream().mapToDouble(t -> (double) t.getCurrentTimeNs()).toArray();
             double[] y = taskInfos.stream().mapToDouble(t -> (double) t.getCurrentQueueSize()).toArray();
-            if (x.length <= 20) {
+            if (x.length <= 50) {
                 ignoreQueueNames.add(queueName);
                 continue;
             }
@@ -110,7 +110,7 @@ public class BoltExecutorOptimizerUtil {
         if (preds.size() == 0 || remainCapacity <= 0) {
             return increase;
         }
-        for (long cur = currentTime; cur <= maxTime; cur += delta) {
+        for (long cur = currentTimeNs; cur <= maxTime; cur += delta) {
             Map<String, Integer> increaseTmp = new HashMap<>();
             int total = 0;
             for (String queueName : taskQueues.keySet()) {
@@ -118,8 +118,8 @@ public class BoltExecutorOptimizerUtil {
                     continue;
                 }
                 int step = (int) ((cur - starts.get(queueName)) / delta);
-                double predValue = preds.get(queueName)[step];
-                int inc = Math.max(0, (int) predValue - taskQueues.get(queueName).getMaximumQueueSize());
+                double predValue = Math.max(preds.get(queueName)[step], 0);
+                int inc = Math.max(0, (int) predValue - taskQueues.get(queueName).getCapacity());
                 if (inc > 0) {
                     total += inc;
                     increaseTmp.put(queueName, inc);

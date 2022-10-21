@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.storm.executor.bolt.BoltWeightCalc;
+import org.apache.storm.executor.ScheduledStrategy;
 import org.apache.storm.metric.IEventLogger;
 import org.apache.storm.policy.IWaitStrategy;
 import org.apache.storm.serialization.IKryoDecorator;
@@ -1909,7 +1909,7 @@ public class Config extends HashMap<String, Object> {
     }
 
     public void setTopologyBoltThreadPoolStrategy(String strategy) {
-        for (BoltWeightCalc.Strategy systemStrategy : BoltWeightCalc.Strategy.values()) {
+        for (ScheduledStrategy.Strategy systemStrategy : ScheduledStrategy.Strategy.values()) {
             if (systemStrategy.name().equals(strategy)) {
                 setTopologyBoltThreadPoolStrategy(this, strategy);
                 return;
@@ -1963,6 +1963,9 @@ public class Config extends HashMap<String, Object> {
     }
 
     public void setTopologyBoltThreadPoolMinQueueCapacity(int minCapacity) {
+        if (minCapacity <= 0) {
+            throw new IllegalArgumentException("minCapacity must be bigger than 0");
+        }
         setTopologyBoltThreadPoolMinQueueCapacity(this, minCapacity);
     }
 

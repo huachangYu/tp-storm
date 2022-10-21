@@ -1,3 +1,8 @@
+/**
+ * for debug
+ * remove it when releasing
+ * */
+
 package org.apache.storm;
 
 import java.util.Arrays;
@@ -5,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
-import org.apache.storm.executor.bolt.BoltWeightCalc;
+import org.apache.storm.executor.ScheduledStrategy;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -86,7 +91,7 @@ public class WordCountTopology {
             }
             count += 1;
             counts.put(word, count);
-            System.out.printf("word=%s, num=%d\n", word, count);
+            // System.out.printf("word=%s, num=%d\n", word, count);
             collector.emit(new Values(word, count));
         }
 
@@ -105,9 +110,10 @@ public class WordCountTopology {
         Config conf = new Config();
         //conf.setNumWorkers(2);
         conf.useBoltThreadPool(true);
-        conf.setBoltThreadPoolCoreConsumers(4);
+        conf.setBoltThreadPoolCoreConsumers(2);
+        conf.setTopologyBoltThreadPoolMaxConsumers(4);
         conf.setTopologyBoltThreadPoolFetchMaxTasks(3);
-        conf.setTopologyBoltThreadPoolStrategy(BoltWeightCalc.Strategy.QueueAndCostAndWait.name());
+        conf.setTopologyBoltThreadPoolStrategy(ScheduledStrategy.Strategy.QueueAndCostAndWait.name());
         conf.setTopologyBoltThreadPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
         conf.enableBoltThreadPoolOptimize(true);

@@ -44,4 +44,12 @@ public class SystemMonitor {
             lock.unlock();
         }
     }
+
+    public double getMemoryUsage() {
+        Runtime runtime = Runtime.getRuntime();
+        double maxMemory = runtime.maxMemory();
+        double freeMemory = runtime.freeMemory();
+        double totalMemory = runtime.totalMemory();
+        return (totalMemory - freeMemory) / maxMemory;
+    }
 }

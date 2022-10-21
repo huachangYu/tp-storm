@@ -24,9 +24,10 @@ import org.apache.storm.ICredentialsListener;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
-import org.apache.storm.executor.ScheduledBoltExecutorPool;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
+import org.apache.storm.executor.IScheduledExecutorPool;
+import org.apache.storm.executor.ScheduledStrategy;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
 import org.apache.storm.metric.api.IMetricsRegistrant;
 import org.apache.storm.policy.IWaitStrategy;
@@ -77,7 +78,7 @@ public class BoltExecutor extends Executor {
         this.stats = new BoltExecutorStats(ConfigUtils.samplingRate(this.getTopoConf()),
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
         this.useThreadPool = false;
-        this.monitor = new BoltExecutorMonitor(workerData);
+        this.monitor = new BoltExecutorMonitor();
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {
@@ -233,12 +234,13 @@ public class BoltExecutor extends Executor {
         }
     }
 
-    public void initBoltThreadPool(ScheduledBoltExecutorPool boltExecutorPool) {
+    public void initBoltThreadPool(IScheduledExecutorPool boltExecutorPool) {
         this.useThreadPool = boltExecutorPool != null;
-        this.boltExecutorPool = boltExecutorPool;
-        this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
-                BoltWeightCalc.Strategy.Fair.name());
-        this.monitor.setStrategy(this.threadPoolStrategy);
+        if (this.useThreadPool) {
+            this.boltExecutorPool = boltExecutorPool;
+            this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
+                    ScheduledStrategy.Strategy.Fair.name());
+        }
     }
 
     public ExecutorShutdown execute() throws Exception {
@@ -251,21 +253,6 @@ public class BoltExecutor extends Executor {
                 Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, getName());
         LOG.info("Finished loading executor " + componentId + ":" + executorId);
         return new ExecutorShutdown(this, Lists.newArrayList(handler), idToTask, receiveQueue);
-    }
-
-    public double getWeight() {
-        return monitor.getWeight();
-    }
-
-    public double getLatestWeight(long current, int taskQueueSize, int queueCapacity,
-                                  int minTaskQueueSize, int maxTaskQueueSize,
-                                  double minAvgTime, double maxAvgTime,
-                                  long minWaitingTime, long maxWaitingTime) {
-        monitor.updateWeight(current, taskQueueSize, queueCapacity,
-                minTaskQueueSize, maxTaskQueueSize,
-                minAvgTime, maxAvgTime,
-                minWaitingTime, maxWaitingTime);
-        return monitor.getWeight();
     }
 
 }

@@ -6,14 +6,14 @@ import org.slf4j.LoggerFactory;
 
 public class BoltTask {
     private static final Logger LOG = LoggerFactory.getLogger(BoltTask.class);
-    private Runnable runnable;
+    private Runnable task;
     private final BoltExecutorMonitor monitor;
     private final boolean recordCost;
     private final boolean recordTaskInfo;
     private final String threadName;
-    private long enqueueTime;
-    private long startTime;
-    private long endTime;
+    private long createTimeNs;
+    private long startTimeNs;
+    private long endTimeNs;
 
     private BoltTask(BoltExecutorMonitor monitor, String threadName, boolean recordCost, boolean recordTaskInfo) {
         this.monitor = monitor;
@@ -21,14 +21,14 @@ public class BoltTask {
         this.recordCost = recordCost;
         this.recordTaskInfo = recordTaskInfo;
         if (shouldRecord()) {
-            this.enqueueTime = System.currentTimeMillis();
+            this.createTimeNs = System.nanoTime();
         }
     }
 
-    public BoltTask(Runnable runnable, BoltExecutorMonitor monitor, String threadName,
+    public BoltTask(Runnable task, BoltExecutorMonitor monitor, String threadName,
                     boolean needToRecord, boolean recordTaskInfo) {
         this(monitor, threadName, needToRecord, recordTaskInfo);
-        this.runnable = runnable;
+        this.task = task;
     }
 
     private boolean shouldRecord() {
@@ -41,11 +41,11 @@ public class BoltTask {
 
     public void run() {
         if (shouldRecord()) {
-            this.startTime = System.currentTimeMillis();
+            this.startTimeNs = System.nanoTime();
         }
-        runnable.run();
+        task.run();
         if (shouldRecord()) {
-            this.endTime = System.currentTimeMillis();
+            this.endTimeNs = System.nanoTime();
         }
     }
 
@@ -57,20 +57,24 @@ public class BoltTask {
         return recordTaskInfo;
     }
 
-    public long getCost() {
-        return endTime - startTime;
+    public long getCostNs() {
+        return endTimeNs - startTimeNs;
     }
 
-    public long getEnqueueTime() {
-        return enqueueTime;
+    public long getWaitingNs() {
+        return startTimeNs - createTimeNs;
     }
 
-    public long getStartTime() {
-        return startTime;
+    public long getCreateTimeNs() {
+        return createTimeNs;
     }
 
-    public long getEndTime() {
-        return endTime;
+    public long getStartTimeNs() {
+        return startTimeNs;
+    }
+
+    public long getEndTimeNs() {
+        return endTimeNs;
     }
 
     public String getThreadName() {
@@ -79,7 +83,8 @@ public class BoltTask {
 
     public void printMetrics() {
         if (recordCost) {
-            LOG.info("[boltTask] threadName={}, waitingTime={}, costTime={}", threadName, startTime - enqueueTime, endTime - startTime);
+            LOG.info("[boltTask] threadName={}, waitingTimeNs={}, costTimeNs={}",
+                    threadName, getWaitingNs(), getCostNs());
         }
     }
 }

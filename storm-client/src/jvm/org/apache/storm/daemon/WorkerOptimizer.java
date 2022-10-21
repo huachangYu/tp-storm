@@ -8,13 +8,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.storm.Config;
-import org.apache.storm.generated.Nimbus;
 import org.apache.storm.generated.RebalanceOptions;
 import org.apache.storm.utils.NimbusClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WorkerOptimizer {
+public class WorkerOptimizer implements Shutdownable {
     private static final Logger LOG = LoggerFactory.getLogger(WorkerOptimizer.class);
     private final String topologyName;
     private final Map<String, Object> topologyConf;
@@ -81,6 +80,7 @@ public class WorkerOptimizer {
         }, timeInterval, timeInterval, TimeUnit.MILLISECONDS);
     }
 
+    @Override
     public void shutdown() {
         executor.shutdown();
     }

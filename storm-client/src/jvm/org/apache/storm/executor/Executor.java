@@ -134,7 +134,7 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
     private final Integer v2MetricsTickInterval;
 
     protected boolean useThreadPool;
-    protected ScheduledBoltExecutorPool boltExecutorPool;
+    protected IScheduledExecutorPool boltExecutorPool;
     protected String threadPoolStrategy;
     protected BoltExecutorMonitor monitor;
 

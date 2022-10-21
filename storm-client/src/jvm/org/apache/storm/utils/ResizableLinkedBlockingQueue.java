@@ -8,24 +8,24 @@ import java.util.concurrent.TimeUnit;
  * Copy from <a href="https://github.com/OpenRock/OpenAM">openAm</a>.
  * */
 public class ResizableLinkedBlockingQueue<E> extends LinkedBlockingQueue<E> {
-    private int queueSize;
+    private int capacity;
     private final ResizableSemaphore availablePlaces;
 
     public ResizableLinkedBlockingQueue() {
         super();
-        queueSize = Integer.MAX_VALUE;
-        availablePlaces = new ResizableSemaphore(queueSize, true);
+        capacity = Integer.MAX_VALUE;
+        availablePlaces = new ResizableSemaphore(capacity, true);
     }
 
     public ResizableLinkedBlockingQueue(Collection<? extends E> c) {
         super(c);
-        queueSize = Integer.MAX_VALUE;
-        availablePlaces = new ResizableSemaphore(queueSize, true);
+        capacity = Integer.MAX_VALUE;
+        availablePlaces = new ResizableSemaphore(capacity, true);
     }
 
     public ResizableLinkedBlockingQueue(int initialCapacity) {
         super();
-        queueSize = initialCapacity;
+        capacity = initialCapacity;
         availablePlaces = new ResizableSemaphore(initialCapacity, true);
     }
 
@@ -34,18 +34,18 @@ public class ResizableLinkedBlockingQueue<E> extends LinkedBlockingQueue<E> {
             throw new IllegalArgumentException("Cannot set queue size to a value below zero.");
         }
         int difference;
-        if (newSize < queueSize) {
-            difference = queueSize - newSize;
+        if (newSize < capacity) {
+            difference = capacity - newSize;
             availablePlaces.reducePermits(difference);
-        } else if (newSize > queueSize) {
-            difference = newSize - queueSize;
+        } else if (newSize > capacity) {
+            difference = newSize - capacity;
             availablePlaces.increasePermits(difference);
         }
-        queueSize = newSize;
+        capacity = newSize;
     }
 
-    public int getMaximumQueueSize() {
-        return queueSize;
+    public int getCapacity() {
+        return capacity;
     }
 
     @Override

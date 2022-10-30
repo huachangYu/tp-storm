@@ -1,7 +1,7 @@
 package org.apache.storm.executor;
 
 import org.apache.storm.executor.bolt.BoltExecutorMonitor;
-import org.apache.storm.utils.ResizableLinkedBlockingQueue;
+import org.apache.storm.utils.ResizableBlockingQueue;
 
 public class ScheduledStrategy {
     public enum Strategy {
@@ -10,8 +10,8 @@ public class ScheduledStrategy {
 
     public static class FairStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+        public int compare(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -21,8 +21,8 @@ public class ScheduledStrategy {
 
     public static class OnlyQueueStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+        public int compare(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -32,8 +32,8 @@ public class ScheduledStrategy {
 
     public static class QueueAndCostStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+        public int compare(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -43,8 +43,8 @@ public class ScheduledStrategy {
 
     public static class QueueAndWaitStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+        public int compare(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -54,8 +54,8 @@ public class ScheduledStrategy {
 
     public static class QueueAndCostAndWaitStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+        public int compare(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -63,8 +63,8 @@ public class ScheduledStrategy {
         }
     }
 
-    public static int compare(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                              ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int compare(ResizableBlockingQueue<BoltTask> queue0,
+                              ResizableBlockingQueue<BoltTask> queue1,
                               BoltExecutorMonitor monitor0,
                               BoltExecutorMonitor monitor1,
                               long currentNs,
@@ -83,8 +83,8 @@ public class ScheduledStrategy {
         return 0;
     }
 
-    public static int fair(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                           ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int fair(ResizableBlockingQueue<BoltTask> queue0,
+                           ResizableBlockingQueue<BoltTask> queue1,
                            BoltExecutorMonitor monitor0,
                            BoltExecutorMonitor monitor1,
                            long currentNs) {
@@ -92,16 +92,16 @@ public class ScheduledStrategy {
     }
 
     // if onlyQueue(qa, qb, ma, mb) > 0, queue a has higher priority
-    public static int onlyQueue(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                                ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int onlyQueue(ResizableBlockingQueue<BoltTask> queue0,
+                                ResizableBlockingQueue<BoltTask> queue1,
                                 BoltExecutorMonitor monitor0,
                                 BoltExecutorMonitor monitor1,
                                 long currentNs) {
         return queue1.remainingCapacity() - queue0.remainingCapacity();
     }
 
-    public static int queueAndCost(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                                   ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int queueAndCost(ResizableBlockingQueue<BoltTask> queue0,
+                                   ResizableBlockingQueue<BoltTask> queue1,
                                    BoltExecutorMonitor monitor0,
                                    BoltExecutorMonitor monitor1,
                                    long currentNs) {
@@ -116,8 +116,8 @@ public class ScheduledStrategy {
         return delta > 0 ? 1 : -1;
     }
 
-    public static int queueAndWait(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                                   ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int queueAndWait(ResizableBlockingQueue<BoltTask> queue0,
+                                   ResizableBlockingQueue<BoltTask> queue1,
                                    BoltExecutorMonitor monitor0,
                                    BoltExecutorMonitor monitor1,
                                    long currentNs) {
@@ -133,8 +133,8 @@ public class ScheduledStrategy {
         return delta > 0 ? 1 : -1;
     }
 
-    public static int queueAndCostAndWait(ResizableLinkedBlockingQueue<BoltTask> queue0,
-                                          ResizableLinkedBlockingQueue<BoltTask> queue1,
+    public static int queueAndCostAndWait(ResizableBlockingQueue<BoltTask> queue0,
+                                          ResizableBlockingQueue<BoltTask> queue1,
                                           BoltExecutorMonitor monitor0,
                                           BoltExecutorMonitor monitor1,
                                           long currentNs) {

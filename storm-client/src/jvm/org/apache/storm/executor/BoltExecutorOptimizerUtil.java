@@ -13,7 +13,7 @@ import org.apache.commons.math3.analysis.interpolation.SplineInterpolator;
 import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 import org.apache.storm.executor.bolt.BoltExecutor;
 import org.apache.storm.executor.bolt.BoltExecutorMonitor;
-import org.apache.storm.utils.ResizableLinkedBlockingQueue;
+import org.apache.storm.utils.ResizableBlockingQueue;
 
 public class BoltExecutorOptimizerUtil {
     private static int MAX_TOTAL_CAPACITY  = getRemainCapacityBaseOnMemory();
@@ -25,8 +25,9 @@ public class BoltExecutorOptimizerUtil {
     public static int getRemainCapacityBaseOnMemory() {
         // should be bigger than sizeof(BoltTask)
         final long itemSize = 80;
+        final Runtime runtime = Runtime.getRuntime();
         //leave 1GB of memory for OS
-        final long freeMem = Runtime.getRuntime().freeMemory() - (long) (1.5 * 1024 * 1024);
+        final long freeMem = (runtime.maxMemory() + runtime.freeMemory() - runtime.totalMemory()) - (long) (1.5 * 1024 * 1024);
         return (int) Math.max(0, freeMem / itemSize);
     }
 
@@ -45,17 +46,21 @@ public class BoltExecutorOptimizerUtil {
         return Arima.model(series, ArimaOrder.order(2, 1, 2));
     }
 
-    public static Map<String, Integer> getIncreaseBaseOnArima(Map<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues,
+    public static int getRemainCapacity(Map<String, ResizableBlockingQueue<BoltTask>> taskQueues) {
+        return MAX_TOTAL_CAPACITY == -1 ? getRemainCapacityBaseOnMemory() :
+                Math.max(0, MAX_TOTAL_CAPACITY - taskQueues.values().stream()
+                        .mapToInt(ResizableBlockingQueue::getCapacity).sum());
+    }
+
+    public static Map<String, Integer> getIncreaseBaseOnArima(Map<String, ResizableBlockingQueue<BoltTask>> taskQueues,
                                                               List<BoltExecutor> bolts,
                                                               int minCapacity,
                                                               long currentTimeNs) {
         Map<String, Integer> increase = new HashMap<>();
-        int remainCapacity = MAX_TOTAL_CAPACITY == -1 ? getRemainCapacityBaseOnMemory() :
-                Math.max(0, MAX_TOTAL_CAPACITY - taskQueues.values().stream()
-                        .mapToInt(ResizableLinkedBlockingQueue::getCapacity).sum());
+        int remainCapacity = getRemainCapacity(taskQueues);
         Set<String> ignoreQueueNames = new HashSet<>();
         for (String queueName : taskQueues.keySet()) {
-            ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
             if (queue.getCapacity() <= minCapacity) {
                 continue;
             }
@@ -87,7 +92,7 @@ public class BoltExecutorOptimizerUtil {
             if (ignoreQueueNames.contains(queueName)) {
                 continue;
             }
-            ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
             if (queue.remainingCapacity() < 0.1 * queue.getCapacity()) {
                 int incr =  (int) (0.1 * queue.getCapacity());
                 increase.put(queueName, incr);

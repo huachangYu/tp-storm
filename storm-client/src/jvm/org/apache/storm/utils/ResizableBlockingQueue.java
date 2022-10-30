@@ -7,23 +7,23 @@ import java.util.concurrent.TimeUnit;
 /**
  * Copy from <a href="https://github.com/OpenRock/OpenAM">openAm</a>.
  * */
-public class ResizableLinkedBlockingQueue<E> extends LinkedBlockingQueue<E> {
+public class ResizableBlockingQueue<E> extends LinkedBlockingQueue<E> {
     private int capacity;
     private final ResizableSemaphore availablePlaces;
 
-    public ResizableLinkedBlockingQueue() {
+    public ResizableBlockingQueue() {
         super();
         capacity = Integer.MAX_VALUE;
-        availablePlaces = new ResizableSemaphore(capacity, true);
+        availablePlaces = new ResizableSemaphore(capacity, false);
     }
 
-    public ResizableLinkedBlockingQueue(Collection<? extends E> c) {
+    public ResizableBlockingQueue(Collection<? extends E> c) {
         super(c);
         capacity = Integer.MAX_VALUE;
-        availablePlaces = new ResizableSemaphore(capacity, true);
+        availablePlaces = new ResizableSemaphore(capacity, false);
     }
 
-    public ResizableLinkedBlockingQueue(int initialCapacity) {
+    public ResizableBlockingQueue(int initialCapacity) {
         super();
         capacity = initialCapacity;
         availablePlaces = new ResizableSemaphore(initialCapacity, true);
@@ -70,7 +70,7 @@ public class ResizableLinkedBlockingQueue<E> extends LinkedBlockingQueue<E> {
     @Override
     public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
         if (e == null) {
-            return false;
+            throw new NullPointerException();
         }
         boolean returnValue;
         if (availablePlaces.tryAcquire(timeout, unit)) {

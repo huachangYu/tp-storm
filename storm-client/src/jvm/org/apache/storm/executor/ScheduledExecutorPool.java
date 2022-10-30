@@ -20,7 +20,7 @@ import org.apache.storm.executor.bolt.BoltExecutor;
 import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
 import org.apache.storm.shade.org.json.simple.JSONObject;
 import org.apache.storm.utils.ConfigUtils;
-import org.apache.storm.utils.ResizableLinkedBlockingQueue;
+import org.apache.storm.utils.ResizableBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +78,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final AtomicInteger blockedConsumerNum = new AtomicInteger();
     private final List<BoltConsumer> consumers;
     private final AtomicInteger consumerIndex = new AtomicInteger(0);
-    private final ConcurrentHashMap<String, ResizableLinkedBlockingQueue<BoltTask>> taskQueues;
+    private final ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues;
     private final int maxTasks;
     private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(2000);
     private WorkerOptimizer workerOptimizer;
@@ -148,14 +148,14 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 startExecutorThread = RAND.nextInt(threadsNum);
             }
             BoltExecutor executor = notEmptyThreads.get(startExecutorThread);
-            ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(executor.getName());
+            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(executor.getName());
             final long currentNs = System.nanoTime();
             for (int i = 0; i < threadsNum; i++) {
                 if (i == startExecutorThread) {
                     continue;
                 }
                 BoltExecutor tmpExecutor = notEmptyThreads.get(i);
-                ResizableLinkedBlockingQueue<BoltTask> tmpQueue = taskQueues.get(tmpExecutor.getName());
+                ResizableBlockingQueue<BoltTask> tmpQueue = taskQueues.get(tmpExecutor.getName());
                 if (ScheduledStrategy.compare(queue, tmpQueue, executor.getMonitor(), tmpExecutor.getMonitor(),
                         currentNs, strategy) > 0) {
                     queue = tmpQueue;
@@ -183,7 +183,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 return;
             }
             bolts.add(thread);
-            taskQueues.put(threadName, new ResizableLinkedBlockingQueue<>(minQueueCapacity));
+            taskQueues.put(threadName, new ResizableBlockingQueue<>(minQueueCapacity));
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -263,8 +263,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private void optimize(long currentNs) {
         lock.lock();
         try {
-            optimizeConsumer(currentNs);
             optimizeQueueSize(currentNs);
+            optimizeConsumer(currentNs);
         } finally {
             lock.unlock();
         }
@@ -272,17 +272,31 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
 
     // thread-unsafe
     private void optimizeConsumer(long currentNs) {
-        if (consumers.size() >= maxConsumers || currentNs < lastTimeNsUpdateConsumer + timeIntervalNsUpdateConsumer) {
+        if (consumers.size() >= maxConsumers
+                || taskQueues.size() == 0
+                || currentNs < lastTimeNsUpdateConsumer + timeIntervalNsUpdateConsumer) {
             return;
         }
-        int sumCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getCapacity).sum();
-        int sumSize = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).sum();
+        int queueNum = taskQueues.size();
+        int[] capacities = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
+        int[] sizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
+        double[] workloads = new double[queueNum];
+        for (int  i = 0; i < queueNum; i++) {
+            workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
+        }
+        int sumCapacity = Arrays.stream(capacities).sum();
+        boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
+        boolean isLowLoad = !isOverLoad && Arrays.stream(workloads).anyMatch(t -> t < 0.1);
+        boolean hasRemainCapacity = BoltExecutorOptimizerUtil.getRemainCapacity(taskQueues) > 0.1 * sumCapacity;
+        if ((!isOverLoad && !isLowLoad) || hasRemainCapacity) {
+            return;
+        }
         double cpuUsage = systemMonitor.getAvgCpuUsage();
-        if (sumSize >= 0.8 * sumCapacity && cpuUsage > 0 && cpuUsage < 0.7) {
+        if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.7) {
             addConsumer();
             lastTimeNsUpdateConsumer = currentNs;
             LOG.info("optimize consumer. Added a new consumer");
-        } else if (sumSize <= 0.1 * sumCapacity && consumers.size() > coreConsumers) {
+        } else if (isLowLoad && consumers.size() > coreConsumers) {
             removeConsumer();
             lastTimeNsUpdateConsumer = currentNs;
             LOG.info("optimize consumer. Removed a consumer");
@@ -297,11 +311,11 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             return;
         }
         for (String queueName : increase.keySet()) {
-            ResizableLinkedBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
             queue.resizeQueue(queue.getCapacity() + increase.get(queueName));
         }
-        int[] queueCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getCapacity).toArray();
-        int[] queueSizes = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).toArray();
+        int[] queueCapacity = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
+        int[] queueSizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
         LOG.info("optimize queue size. diff={}. new capacity={}. size={}.",
                 JSONObject.toJSONString(increase), Arrays.toString(queueCapacity),
                 Arrays.toString(queueSizes));
@@ -319,10 +333,17 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             public boolean isOverLoad() {
                 lock.lock();
                 try {
-                    int sumCapacity = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::getCapacity).sum();
-                    int sumSize = taskQueues.values().stream().mapToInt(ResizableLinkedBlockingQueue::size).sum();
+                    int[] capacities = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
+                    int[] sizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
+                    double[] workloads = new double[taskQueues.size()];
+                    for (int  i = 0; i < taskQueues.size(); i++) {
+                        workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
+                    }
+                    int sumCapacity = Arrays.stream(capacities).sum();
+                    boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
+                    boolean hasRemainCapacity = BoltExecutorOptimizerUtil.getRemainCapacity(taskQueues) > 0.1 * sumCapacity;
                     //TODO add cpu usage?
-                    return sumSize >= 0.9 * sumCapacity;
+                    return isOverLoad && !hasRemainCapacity;
                 } finally {
                     lock.unlock();
                 }

@@ -9,30 +9,28 @@ public class BoltTask {
     private Runnable task;
     private final BoltExecutorMonitor monitor;
     private final boolean recordCost;
-    private final boolean recordTaskInfo;
     private final String threadName;
     private long createTimeNs;
     private long startTimeNs;
     private long endTimeNs;
 
-    private BoltTask(BoltExecutorMonitor monitor, String threadName, boolean recordCost, boolean recordTaskInfo) {
+    private BoltTask(BoltExecutorMonitor monitor, String threadName, boolean recordCost) {
         this.monitor = monitor;
         this.threadName = threadName;
         this.recordCost = recordCost;
-        this.recordTaskInfo = recordTaskInfo;
         if (shouldRecord()) {
             this.createTimeNs = System.nanoTime();
         }
     }
 
     public BoltTask(Runnable task, BoltExecutorMonitor monitor, String threadName,
-                    boolean needToRecord, boolean recordTaskInfo) {
-        this(monitor, threadName, needToRecord, recordTaskInfo);
+                    boolean needToRecord) {
+        this(monitor, threadName, needToRecord);
         this.task = task;
     }
 
     private boolean shouldRecord() {
-        return recordCost || recordTaskInfo;
+        return recordCost;
     }
 
     public BoltExecutorMonitor getMonitor() {
@@ -51,10 +49,6 @@ public class BoltTask {
 
     public boolean shouldRecordCost() {
         return recordCost;
-    }
-
-    public boolean shouldRecordTaskInfo() {
-        return recordTaskInfo;
     }
 
     public long getCostNs() {

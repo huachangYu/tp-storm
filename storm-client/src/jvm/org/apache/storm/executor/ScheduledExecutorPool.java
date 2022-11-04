@@ -18,7 +18,6 @@ import org.apache.storm.daemon.WorkerOptimizer;
 import org.apache.storm.daemon.worker.SystemMonitor;
 import org.apache.storm.executor.bolt.BoltExecutor;
 import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
-import org.apache.storm.shade.org.json.simple.JSONObject;
 import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.ResizableBlockingQueue;
 import org.slf4j.Logger;
@@ -45,9 +44,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                         task.run();
                         if (task.shouldRecordCost()) {
                             task.getMonitor().recordCost(task.getCostNs());
-                        }
-                        if (task.shouldRecordTaskInfo()) {
-                            task.getMonitor().recordTaskInfo(task, taskQueues.get(task.getThreadName()).size());
                         }
                     }
                     if (tasks.size() > 0) {
@@ -80,7 +76,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final AtomicInteger consumerIndex = new AtomicInteger(0);
     private final ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues;
     private final int maxTasks;
-    private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(2000);
+    private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(1000);
+    private TaskQueueOptimizer taskQueueOptimizer;
     private WorkerOptimizer workerOptimizer;
     private long lastTimeNsUpdateConsumer = System.nanoTime();
     private long timeIntervalNsUpdateConsumer = 5000L * 1000 * 1000; //5s
@@ -111,7 +108,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.optimizeWorker = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, true);
         if (this.optimizePool && topologyConf.containsKey(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY)) {
             long totalCapacity = (Long) topologyConf.get(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY);
-            BoltExecutorOptimizerUtil.setMaxTotalCapacity((int) totalCapacity);
+            this.taskQueueOptimizer = new TaskQueueOptimizer(taskQueues, minQueueCapacity, (int) totalCapacity,
+                    0.9, 0.1, 0.5, 0.5);
         }
         String strategyName = (String) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
                 ScheduledStrategy.Strategy.Fair.name());
@@ -167,7 +165,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 tasks.add(queue.remove());
             }
             if (optimizePool && optimizeSample.getAsBoolean()) {
-                optimize(currentNs);
+                optimizeConsumer(currentNs);
+                taskQueueOptimizer.optimize();
             }
             return tasks;
         } finally {
@@ -260,16 +259,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
     }
 
-    private void optimize(long currentNs) {
-        lock.lock();
-        try {
-            optimizeQueueSize(currentNs);
-            optimizeConsumer(currentNs);
-        } finally {
-            lock.unlock();
-        }
-    }
-
     // thread-unsafe
     private void optimizeConsumer(long currentNs) {
         if (consumers.size() >= maxConsumers
@@ -287,7 +276,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         int sumCapacity = Arrays.stream(capacities).sum();
         boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
         boolean isLowLoad = !isOverLoad && Arrays.stream(workloads).anyMatch(t -> t < 0.1);
-        boolean hasRemainCapacity = BoltExecutorOptimizerUtil.getRemainCapacity(taskQueues) > 0.1 * sumCapacity;
+        boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.5 * sumCapacity;
         if ((!isOverLoad && !isLowLoad) || hasRemainCapacity) {
             return;
         }
@@ -301,24 +290,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             lastTimeNsUpdateConsumer = currentNs;
             LOG.info("optimize consumer. Removed a consumer");
         }
-    }
-
-    // thread-unsafe
-    private void optimizeQueueSize(long currentNs) {
-        Map<String, Integer> increase = BoltExecutorOptimizerUtil.getIncreaseBaseOnArima(taskQueues, bolts,
-                minQueueCapacity, currentNs);
-        if (increase.size() == 0) {
-            return;
-        }
-        for (String queueName : increase.keySet()) {
-            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
-            queue.resizeQueue(queue.getCapacity() + increase.get(queueName));
-        }
-        int[] queueCapacity = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
-        int[] queueSizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
-        LOG.info("optimize queue size. diff={}. new capacity={}. size={}.",
-                JSONObject.toJSONString(increase), Arrays.toString(queueCapacity),
-                Arrays.toString(queueSizes));
     }
 
     private void startWorkerOptimizer() {
@@ -341,7 +312,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                     }
                     int sumCapacity = Arrays.stream(capacities).sum();
                     boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
-                    boolean hasRemainCapacity = BoltExecutorOptimizerUtil.getRemainCapacity(taskQueues) > 0.1 * sumCapacity;
+                    boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.1 * sumCapacity;
                     //TODO add cpu usage?
                     return isOverLoad && !hasRemainCapacity;
                 } finally {
@@ -350,5 +321,18 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             }
         });
         this.workerOptimizer.start();
+    }
+
+    private void printMetrics() {
+        lock.lock();
+        try {
+            // print queue info
+            LOG.info("queue info: {}.", Arrays.toString(taskQueues.entrySet().stream()
+                    .map(t -> String.format("\"%s\":(%d/%d)",
+                            t.getKey(), t.getValue().size(), t.getValue().getCapacity())).toArray()));
+            //
+        } finally {
+            lock.unlock();
+        }
     }
 }

@@ -19,7 +19,7 @@ public class WorkerOptimizer implements Shutdownable {
     private final Map<String, Object> topologyConf;
     private final int maxWorkers;
     private final long timeInterval = 10;
-    private final long optimizeTimeInterval = 120 * 1000; //TODO change it to 2 minutes
+    private final long optimizeTimeInterval = 120 * 1000;
     private long lastOptimizeTime = -1;
     private final Queue<Long> overloadTimes = new LinkedList<>();
     private final Queue<Long> normalTimes = new LinkedList<>();

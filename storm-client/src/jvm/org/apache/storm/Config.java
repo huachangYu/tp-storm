@@ -202,45 +202,49 @@ public class Config extends HashMap<String, Object> {
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_CORE_CONSUMERS = "topology.bolt.threadpool.core.consumers";
+    public static final String BOLT_EXECUTOR_POOL_CORE_CONSUMERS = "topology.bolt.executor.pool.core.consumers";
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS = "topology.bolt.threadpool.max.consumers";
+    public static final String BOLT_EXECUTOR_POOL_MAX_CONSUMERS = "topology.bolt.executor.pool.max.consumers";
 
     @IsBoolean
-    public static final String TOPOLOGY_USE_BOLT_THREAD_POOL = "topology.bolt.threadpool.on";
+    public static final String TOPOLOGY_USE_BOLT_THREAD_POOL = "topology.bolt.executor.pool.on";
 
     @IsString
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_STRATEGY = "topology.bolt.threadpool.strategy";
+    public static final String BOLT_EXECUTOR_POOL_STRATEGY = "topology.bolt.executor.pool.strategy";
 
     @IsStringList
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_IDS = "topology.bolt.threadpool.ids";
+    public static final String BOLT_EXECUTOR_POOL_IDS = "topology.bolt.executor.pool.ids";
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS = "topology.bolt.threadpool.fetch.max.tasks";
+    public static final String BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE = "topology.bolt.executor.pool.max.batch.size";
 
     @IsBoolean
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE = "topology.bolt.threadpool.optimize";
+    public static final String TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE = "topology.bolt.executor.pool.optimize";
 
     @IsBoolean
     public static final String TOPOLOGY_ENABLE_WORKERS_OPTIMIZE = "topology.enable.workers.optimize";
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_MIN_QUEUE_CAPACITY = "topology.bolt.threadpool.min.queue.capacity";
+    public static final String BOLT_EXECUTOR_POOL_MIN_QUEUE_CAPACITY = "topology.bolt.executor.pool.min.queue.capacity";
+    
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_QUEUE_CAPACITY = "topology.bolt.threadpool.max.queue.capacity";
+    public static final String BOLT_EXECUTOR_POOL_MAX_QUEUE_CAPACITY = "topology.bolt.executor.pool.max.queue.capacity";
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY = "topology.bolt.threadpool.total.queue.capacity";
+    public static final String BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY = "topology.bolt.executor.pool.total.queue.capacity";
+
+    @IsBoolean
+    public static final String BOLT_EXECUTOR_POOL_PRINT_METRICS = "topology.bolt.executor.pool.print.metrics";
 
     @IsInteger
     @IsPositiveNumber
-    public static final String TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM = "topology.bolt.threadpool.max.worker.num";
+    public static final String TOPOLOGY_MAX_WORKER_NUM = "topology.max.worker.num";
 
     /**
      * How many instances to create for a spout/bolt. A task runs on a thread with zero or more other tasks for the same spout/bolt. The
@@ -1896,50 +1900,50 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
-    public static void setBoltThreadPoolCoreConsumers(Map<String, Object> conf, int coreNum) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_CONSUMERS, coreNum);
+    public static void setBoltExecutorPoolCoreConsumers(Map<String, Object> conf, int coreNum) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_CORE_CONSUMERS, coreNum);
     }
 
-    public static void setTopologyUseBoltThreadPool(Map<String, Object> conf, boolean isOn) {
+    public static void setTopologyUseBoltExecutorPool(Map<String, Object> conf, boolean isOn) {
         conf.put(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, isOn);
     }
 
-    public static void setTopologyBoltThreadPoolStrategy(Map<String, Object> conf, String strategy) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY, strategy);
+    public static void setBoltExecutorPoolStrategy(Map<String, Object> conf, String strategy) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_STRATEGY, strategy);
     }
 
-    public void setTopologyBoltThreadPoolStrategy(String strategy) {
+    public void setBoltExecutorPoolStrategy(String strategy) {
         for (ScheduledStrategy.Strategy systemStrategy : ScheduledStrategy.Strategy.values()) {
             if (systemStrategy.name().equals(strategy)) {
-                setTopologyBoltThreadPoolStrategy(this, strategy);
+                setBoltExecutorPoolStrategy(this, strategy);
                 return;
             }
         }
         throw new RuntimeException("invalid strategy.");
     }
 
-    public static void setTopologyBoltThreadPoolIds(Map<String, Object> conf, List<String> boltIds) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_IDS, boltIds);
+    public static void setBoltExecutorPoolIds(Map<String, Object> conf, List<String> boltIds) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_IDS, boltIds);
     }
 
-    public void setTopologyBoltThreadPoolIds(List<String> boltIds) {
-        setTopologyBoltThreadPoolIds(this, boltIds);
+    public void setBoltExecutorPoolIds(List<String> boltIds) {
+        setBoltExecutorPoolIds(this, boltIds);
     }
 
-    public static void setTopologyBoltThreadPoolFetchMaxTasks(Map<String, Object> conf, int maxTasks) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, maxTasks);
+    public static void setBoltExecutorPoolFetchMaxTasks(Map<String, Object> conf, int maxTasks) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE, maxTasks);
     }
 
-    public void setTopologyBoltThreadPoolFetchMaxTasks(int maxTasks) {
-        setTopologyBoltThreadPoolFetchMaxTasks(this, maxTasks);
+    public void setBoltExecutorPoolFetchMaxTasks(int maxTasks) {
+        setBoltExecutorPoolFetchMaxTasks(this, maxTasks);
     }
 
-    public static void setTopologyBoltThreadPoolOptimize(Map<String, Object> conf, boolean on) {
+    public static void setBoltExecutorPoolOptimize(Map<String, Object> conf, boolean on) {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, on);
     }
 
-    public void enableBoltThreadPoolOptimize(boolean on) {
-        setTopologyBoltThreadPoolOptimize(this, on);
+    public void enableBoltExecutorPoolOptimize(boolean on) {
+        setBoltExecutorPoolOptimize(this, on);
     }
 
     public static void setTopologyEnableWorkersOptimize(Map<String, Object> conf, boolean on) {
@@ -1950,47 +1954,55 @@ public class Config extends HashMap<String, Object> {
         setTopologyEnableWorkersOptimize(this, on);
     }
 
-    public static void setTopologyBoltThreadPoolMaxConsumers(Map<String, Object> conf, int maxConsumers) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS, maxConsumers);
+    public static void setBoltExecutorPoolMaxConsumers(Map<String, Object> conf, int maxConsumers) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, maxConsumers);
     }
 
-    public void setTopologyBoltThreadPoolMaxConsumers(int maxConsumers) {
-        setTopologyBoltThreadPoolMaxConsumers(this, maxConsumers);
+    public void setBoltExecutorPoolMaxConsumers(int maxConsumers) {
+        setBoltExecutorPoolMaxConsumers(this, maxConsumers);
     }
 
-    public static void setTopologyBoltThreadPoolMinQueueCapacity(Map<String, Object> conf, int minCapacity) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MIN_QUEUE_CAPACITY, minCapacity);
+    public static void setBoltExecutorPoolMinQueueCapacity(Map<String, Object> conf, int minCapacity) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_MIN_QUEUE_CAPACITY, minCapacity);
     }
 
-    public void setTopologyBoltThreadPoolMinQueueCapacity(int minCapacity) {
+    public void setBoltExecutorPoolMinQueueCapacity(int minCapacity) {
         if (minCapacity <= 0) {
             throw new IllegalArgumentException("minCapacity must be bigger than 0");
         }
-        setTopologyBoltThreadPoolMinQueueCapacity(this, minCapacity);
+        setBoltExecutorPoolMinQueueCapacity(this, minCapacity);
     }
 
-    public static void setTopologyBoltThreadPoolMaxQueueCapacity(Map<String, Object> conf, int maxCapacity) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_QUEUE_CAPACITY, maxCapacity);
+    public static void setBoltExecutorPoolMaxQueueCapacity(Map<String, Object> conf, int maxCapacity) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_MAX_QUEUE_CAPACITY, maxCapacity);
     }
 
-    public void setTopologyBoltThreadPoolMaxQueueCapacity(int maxCapacity) {
-        setTopologyBoltThreadPoolMaxQueueCapacity(this, maxCapacity);
+    public void setBoltExecutorPoolMaxQueueCapacity(int maxCapacity) {
+        setBoltExecutorPoolMaxQueueCapacity(this, maxCapacity);
     }
 
-    public static void setTopologyBoltThreadPoolTotalQueueCapacity(Map<String, Object> conf, int totalCapacity) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY, totalCapacity);
+    public static void setBoltExecutorPoolTotalQueueCapacity(Map<String, Object> conf, int totalCapacity) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY, totalCapacity);
     }
 
-    public void setTopologyBoltThreadPoolTotalQueueCapacity(int totalCapacity) {
-        setTopologyBoltThreadPoolTotalQueueCapacity(this, totalCapacity);
+    public void setBoltExecutorPoolTotalQueueCapacity(int totalCapacity) {
+        setBoltExecutorPoolTotalQueueCapacity(this, totalCapacity);
+    }
+    
+    public static void setBoltExecutorPoolPrintMetrics(Map<String, Object> conf, boolean printMetrics) {
+        conf.put(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, printMetrics);
+    }
+    
+    public void enableBoltExecutorPoolPrintMetrics(boolean printMetrics) {
+        setBoltExecutorPoolPrintMetrics(this, printMetrics);
     }
 
-    public static void setTopologyBoltThreadPoolMaxWorkerNum(Map<String, Object> conf, int maxWorkerNum) {
-        conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM, maxWorkerNum);
+    public static void setBoltExecutorPoolMaxWorkerNum(Map<String, Object> conf, int maxWorkerNum) {
+        conf.put(Config.TOPOLOGY_MAX_WORKER_NUM, maxWorkerNum);
     }
 
-    public void setTopologyBoltThreadPoolMaxWorkerNum(int maxWorkerNum) {
-        setTopologyBoltThreadPoolMaxWorkerNum(this, maxWorkerNum);
+    public void setBoltExecutorPoolMaxWorkerNum(int maxWorkerNum) {
+        setBoltExecutorPoolMaxWorkerNum(this, maxWorkerNum);
     }
 
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
@@ -2130,12 +2142,12 @@ public class Config extends HashMap<String, Object> {
         setNumWorkers(this, workers);
     }
 
-    public void setBoltThreadPoolCoreConsumers(int coreNum) {
-        setBoltThreadPoolCoreConsumers(this, coreNum);
+    public void setBoltExecutorPoolCoreConsumers(int coreNum) {
+        setBoltExecutorPoolCoreConsumers(this, coreNum);
     }
 
-    public void useBoltThreadPool(boolean isOn) {
-        setTopologyUseBoltThreadPool(this, isOn);
+    public void useBoltExecutorPool(boolean isOn) {
+        setTopologyUseBoltExecutorPool(this, isOn);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

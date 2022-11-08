@@ -1,21 +1,19 @@
 package org.apache.storm.executor.bolt;
 
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 
-import org.apache.storm.executor.BoltTask;
 import org.apache.storm.utils.ConfigUtils;
 
 public class BoltExecutorMonitor {
     private long lastTimeNs = System.nanoTime();
     private final int windowsSize = 100;
     private final ReentrantLock costLock = new ReentrantLock();
-    private final Queue<Long> costTimeQueue = new LinkedList<>();
-    private final AtomicLong totalTime = new AtomicLong(0);
+    private final Queue<Long> costTimeNsQueue = new LinkedList<>();
+    private final AtomicLong totalTimeNs = new AtomicLong(0);
     private final BooleanSupplier costSampler = ConfigUtils.evenSampler(10);
 
     public BoltExecutorMonitor() {
@@ -27,11 +25,11 @@ public class BoltExecutorMonitor {
         }
         costLock.lock();
         try {
-            if (costTimeQueue.size() >= windowsSize) {
-                totalTime.addAndGet(-costTimeQueue.poll());
+            if (costTimeNsQueue.size() >= windowsSize) {
+                totalTimeNs.addAndGet(-costTimeNsQueue.poll());
             }
-            costTimeQueue.add(ns);
-            totalTime.addAndGet(ns);
+            costTimeNsQueue.add(ns);
+            totalTimeNs.addAndGet(ns);
         } finally {
             costLock.unlock();
         }
@@ -41,21 +39,17 @@ public class BoltExecutorMonitor {
         this.lastTimeNs = ns;
     }
 
-    public long getLastTimeNs() {
-        return lastTimeNs;
-    }
-
     public long getWaitingTime(long ns) {
         return ns - lastTimeNs;
     }
 
-    public double getAvgTime() {
+    public double getAvgTimeNs() {
         int size;
-        if ((size = costTimeQueue.size()) == 0) {
+        if ((size = costTimeNsQueue.size()) == 0) {
             return 0;
         }
         // it is thread-unsafe, but has little effect. To improve performance, don't lock it
-        return (double) totalTime.get() / (double) size;
+        return (double) totalTimeNs.get() / (double) size;
     }
 
     public boolean shouldRecordCost() {

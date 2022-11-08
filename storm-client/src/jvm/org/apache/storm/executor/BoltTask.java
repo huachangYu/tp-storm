@@ -1,11 +1,24 @@
 package org.apache.storm.executor;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.apache.storm.executor.bolt.BoltExecutorMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BoltTask {
     private static final Logger LOG = LoggerFactory.getLogger(BoltTask.class);
+    //metrics
+    private static Lock lock = new ReentrantLock();
+    private static boolean enablePrintMetrics = false;
+    private static Map<String, Long> totalWaiting = new HashMap<>();
+    private static Map<String, Long> totalCost = new HashMap<>();
+    private static Map<String, Long> lastPrintTimeNs = new HashMap<>();
+    private static Map<String, Long> totalCount = new HashMap<>();
+
     private Runnable task;
     private final BoltExecutorMonitor monitor;
     private final boolean recordCost;
@@ -29,6 +42,10 @@ public class BoltTask {
         this.task = task;
     }
 
+    public static void setEnablePrintMetrics(boolean enablePrintMetrics) {
+        BoltTask.enablePrintMetrics = enablePrintMetrics;
+    }
+
     private boolean shouldRecord() {
         return recordCost;
     }
@@ -44,6 +61,9 @@ public class BoltTask {
         task.run();
         if (shouldRecord()) {
             this.endTimeNs = System.nanoTime();
+            if (enablePrintMetrics) {
+                updateMetrics();
+            }
         }
     }
 
@@ -59,26 +79,33 @@ public class BoltTask {
         return startTimeNs - createTimeNs;
     }
 
-    public long getCreateTimeNs() {
-        return createTimeNs;
-    }
-
-    public long getStartTimeNs() {
-        return startTimeNs;
-    }
-
-    public long getEndTimeNs() {
-        return endTimeNs;
-    }
-
-    public String getThreadName() {
-        return threadName;
-    }
-
-    public void printMetrics() {
-        if (recordCost) {
-            LOG.info("[boltTask] threadName={}, waitingTimeNs={}, costTimeNs={}",
-                    threadName, getWaitingNs(), getCostNs());
+    public void updateMetrics() {
+        if (endTimeNs == 0 || !shouldRecord()) {
+            return;
         }
+        lock.lock();
+        if (!lastPrintTimeNs.containsKey(threadName)) {
+            lastPrintTimeNs.put(threadName, endTimeNs);
+        }
+        Long lastTimeNs = lastPrintTimeNs.get(threadName);
+        if (endTimeNs - lastTimeNs >= 1000 * 1000 * 1000) {
+            // print metrics per second
+            long waitingTimeNs = totalWaiting.getOrDefault(threadName, 0L);
+            long costTimeNs = totalCost.getOrDefault(threadName, 0L);
+            long count = totalCount.getOrDefault(threadName, 1L);
+            LOG.info("[boltTask] threadName={}, averageWaitingTimeNs={}ms, averageCostTimeNs={}ms",
+                    threadName,
+                    (double) waitingTimeNs / (double) (1000 * 1000 * count),
+                    (double) costTimeNs / (double) (1000 * 1000 * count));
+            lastPrintTimeNs.put(threadName, endTimeNs);
+            totalCost.put(threadName, 0L);
+            totalWaiting.put(threadName, 0L);
+            totalCount.put(threadName, 0L);
+        } else {
+            totalCost.put(threadName, totalCost.getOrDefault(threadName, 0L) + getCostNs());
+            totalWaiting.put(threadName, totalWaiting.getOrDefault(threadName, 0L) + getWaitingNs());
+            totalCount.put(threadName, totalCount.getOrDefault(threadName, 0L) + 1);
+        }
+        lock.unlock();
     }
 }

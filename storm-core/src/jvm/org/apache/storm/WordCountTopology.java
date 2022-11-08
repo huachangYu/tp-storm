@@ -109,15 +109,16 @@ public class WordCountTopology {
 
         Config conf = new Config();
         //conf.setNumWorkers(2);
-        conf.useBoltThreadPool(true);
-        conf.setBoltThreadPoolCoreConsumers(2);
-        conf.setTopologyBoltThreadPoolMaxConsumers(4);
-        conf.setTopologyBoltThreadPoolFetchMaxTasks(3);
-        conf.setTopologyBoltThreadPoolStrategy(ScheduledStrategy.Strategy.QueueAndCostAndWait.name());
-        conf.setTopologyBoltThreadPoolTotalQueueCapacity(2000000);
+        conf.useBoltExecutorPool(true);
+        conf.setBoltExecutorPoolCoreConsumers(2);
+        conf.setBoltExecutorPoolMaxConsumers(4);
+        conf.setBoltExecutorPoolFetchMaxTasks(3);
+        conf.setBoltExecutorPoolStrategy(ScheduledStrategy.Strategy.QueueAndCostAndWait.name());
+        conf.setBoltExecutorPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
-        conf.enableBoltThreadPoolOptimize(true);
-        conf.setTopologyBoltThreadPoolIds(Arrays.asList("split", "count"));
+        conf.enableBoltExecutorPoolOptimize(true);
+        conf.setBoltExecutorPoolIds(Arrays.asList("split", "count"));
+        conf.enableBoltExecutorPoolPrintMetrics(false);
 
         LocalCluster cluster = new LocalCluster();
         cluster.submitTopology("word-count", conf, builder.createTopology());

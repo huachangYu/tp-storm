@@ -42,6 +42,7 @@ import org.apache.storm.cluster.VersionedData;
 import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.supervisor.AdvancedFSOps;
 import org.apache.storm.daemon.worker.BackPressureTracker.BackpressureState;
+import org.apache.storm.executor.BoltTask;
 import org.apache.storm.executor.IRunningExecutor;
 import org.apache.storm.executor.IScheduledExecutorPool;
 import org.apache.storm.executor.ScheduledExecutorPool;
@@ -252,13 +253,15 @@ public class WorkerState {
         boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
         this.systemMonitor = new SystemMonitor();
         if (useThreadPool) {
-            long coreConsumers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_CORE_CONSUMERS,
+            long coreConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_CORE_CONSUMERS,
                     (long) Runtime.getRuntime().availableProcessors());
-            long maxConsumers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_CONSUMERS, coreConsumers);
-            long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_MAX_WORKER_NUM, 1L);
-            long maxTasks = (Long)  topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_FETCH_MAX_TASKS, 1L);
+            long maxConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, coreConsumers);
+            long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_MAX_WORKER_NUM, 1L);
+            long maxTasks = (Long)  topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE, 1L);
             this.boltExecutorPool = new ScheduledExecutorPool(systemMonitor, topologyId, topologyConf,
                     (int) coreConsumers, (int) maxConsumers, (int) maxWorkers, (int) maxTasks);
+            boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
+            BoltTask.setEnablePrintMetrics(printMetrics);
         }
     }
 

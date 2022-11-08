@@ -105,8 +105,8 @@ public class ScheduledStrategy {
                                    BoltExecutorMonitor monitor0,
                                    BoltExecutorMonitor monitor1,
                                    long currentNs) {
-        double cost0 = monitor0.getAvgTime();
-        double cost1 = monitor1.getAvgTime();
+        double cost0 = monitor0.getAvgTimeNs();
+        double cost1 = monitor1.getAvgTimeNs();
         int remainCapacity0 = queue0.remainingCapacity();
         int remainCapacity1 = queue1.remainingCapacity();
         double delta = remainCapacity1 * cost1 -  remainCapacity0 * cost0;
@@ -140,8 +140,8 @@ public class ScheduledStrategy {
                                           long currentNs) {
         double waiting0 = monitor0.getWaitingTime(currentNs);
         double waiting1 = monitor1.getWaitingTime(currentNs);
-        double cost0 = monitor0.getAvgTime();
-        double cost1 = monitor1.getAvgTime();
+        double cost0 = monitor0.getAvgTimeNs();
+        double cost1 = monitor1.getAvgTimeNs();
         int size0 = queue0.size();
         int size1 = queue1.size();
         double rr0 = size0 * (1 + waiting0 / Math.max(cost0, 1));

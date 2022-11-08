@@ -44,6 +44,7 @@ import org.apache.storm.daemon.Acker;
 import org.apache.storm.daemon.DaemonCommon;
 import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.daemon.StormCommon;
+import org.apache.storm.executor.BoltTask;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.executor.IRunningExecutor;

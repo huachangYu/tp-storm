@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private static final Logger LOG = LoggerFactory.getLogger(ScheduledExecutorPool.class);
     private static final Random RAND = new Random();
+    private static long totalTimeNsPerBatch = 10 * 1000 * 1000; // 10ms
 
     private class BoltConsumer extends Thread {
         private volatile boolean running;
@@ -85,6 +86,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final boolean optimizePool;
     private final boolean optimizeWorker;
     private final ScheduledStrategy.Strategy strategy;
+    private Thread metricsThread;
 
     public ScheduledExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
         this(systemMonitor, topologyId, topologyConf, SystemMonitor.CPU_CORE_NUM,
@@ -97,7 +99,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.topologyId = topologyId;
         this.topologyConf = topologyConf;
         this.minQueueCapacity = ((Long) topologyConf.getOrDefault(
-                Config.TOPOLOGY_BOLT_THREAD_POOL_MIN_QUEUE_CAPACITY, 1000L)).intValue();
+                Config.BOLT_EXECUTOR_POOL_MIN_QUEUE_CAPACITY, 1000L)).intValue();
         this.coreConsumers = coreConsumers;
         this.maxConsumers = maxConsumers;
         this.maxWorkers = maxWorkers;
@@ -106,12 +108,12 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.maxTasks = maxTasks;
         this.optimizePool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, true);
         this.optimizeWorker = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, true);
-        if (this.optimizePool && topologyConf.containsKey(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY)) {
-            long totalCapacity = (Long) topologyConf.get(Config.TOPOLOGY_BOLT_THREAD_POOL_TOTAL_QUEUE_CAPACITY);
+        if (this.optimizePool && topologyConf.containsKey(Config.BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY)) {
+            long totalCapacity = (Long) topologyConf.get(Config.BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY);
             this.taskQueueOptimizer = new TaskQueueOptimizer(taskQueues, minQueueCapacity, (int) totalCapacity,
                     0.9, 0.1, 0.5, 0.5);
         }
-        String strategyName = (String) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_STRATEGY,
+        String strategyName = (String) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_STRATEGY,
                 ScheduledStrategy.Strategy.Fair.name());
         this.strategy = ScheduledStrategy.Strategy.valueOf(strategyName);
         while (consumers.size() < coreConsumers) {
@@ -119,6 +121,22 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
         if (this.optimizeWorker) {
             startWorkerOptimizer();
+        }
+
+        boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
+        if (printMetrics) {
+            this.metricsThread = new Thread(() -> {
+                while (true) {
+                    printMetrics();
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+            this.metricsThread.setDaemon(true);
+            this.metricsThread.start();
         }
     }
 
@@ -330,7 +348,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             LOG.info("queue info: {}.", Arrays.toString(taskQueues.entrySet().stream()
                     .map(t -> String.format("\"%s\":(%d/%d)",
                             t.getKey(), t.getValue().size(), t.getValue().getCapacity())).toArray()));
-            //
         } finally {
             lock.unlock();
         }

@@ -217,10 +217,6 @@ public class Config extends HashMap<String, Object> {
     @IsStringList
     public static final String BOLT_EXECUTOR_POOL_IDS = "topology.bolt.executor.pool.ids";
 
-    @IsInteger
-    @IsPositiveNumber
-    public static final String BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE = "topology.bolt.executor.pool.max.batch.size";
-
     @IsBoolean
     public static final String TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE = "topology.bolt.executor.pool.optimize";
 
@@ -1928,14 +1924,6 @@ public class Config extends HashMap<String, Object> {
 
     public void setBoltExecutorPoolIds(List<String> boltIds) {
         setBoltExecutorPoolIds(this, boltIds);
-    }
-
-    public static void setBoltExecutorPoolFetchMaxTasks(Map<String, Object> conf, int maxTasks) {
-        conf.put(Config.BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE, maxTasks);
-    }
-
-    public void setBoltExecutorPoolFetchMaxTasks(int maxTasks) {
-        setBoltExecutorPoolFetchMaxTasks(this, maxTasks);
     }
 
     public static void setBoltExecutorPoolOptimize(Map<String, Object> conf, boolean on) {

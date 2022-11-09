@@ -316,7 +316,7 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
                     LOG.warn("failed to run task. ex:{}", ex.getMessage());
                 }
             };
-            if (useThreadPool && receiveQueue.size() >= 10) {
+            if (useThreadPool) {
                 boltExecutorPool.submit(getName(), new BoltTask(task, monitor, getName(), monitor.shouldRecordCost()));
             } else {
                 task.run();

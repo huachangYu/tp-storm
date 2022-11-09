@@ -93,10 +93,10 @@ public class BoltTask {
             long waitingTimeNs = totalWaiting.getOrDefault(threadName, 0L);
             long costTimeNs = totalCost.getOrDefault(threadName, 0L);
             long count = totalCount.getOrDefault(threadName, 1L);
-            LOG.info("[boltTask] threadName={}, averageWaitingTimeNs={}ms, averageCostTimeNs={}ms",
+            LOG.info("[boltTask] threadName={}, averageWaitingTime={}ms, averageCostTime={}ms",
                     threadName,
-                    (double) waitingTimeNs / (double) (1000 * 1000 * count),
-                    (double) costTimeNs / (double) (1000 * 1000 * count));
+                    String.format("%.4f", (double) waitingTimeNs / (double) (1000 * 1000 * count)),
+                    String.format("%.4f", (double) costTimeNs / (double) (1000 * 1000 * count)));
             lastPrintTimeNs.put(threadName, endTimeNs);
             totalCost.put(threadName, 0L);
             totalWaiting.put(threadName, 0L);

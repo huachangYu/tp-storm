@@ -112,13 +112,12 @@ public class WordCountTopology {
         conf.useBoltExecutorPool(true);
         conf.setBoltExecutorPoolCoreConsumers(2);
         conf.setBoltExecutorPoolMaxConsumers(4);
-        conf.setBoltExecutorPoolFetchMaxTasks(3);
         conf.setBoltExecutorPoolStrategy(ScheduledStrategy.Strategy.QueueAndCostAndWait.name());
         conf.setBoltExecutorPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
         conf.enableBoltExecutorPoolOptimize(true);
         conf.setBoltExecutorPoolIds(Arrays.asList("split", "count"));
-        conf.enableBoltExecutorPoolPrintMetrics(false);
+        conf.enableBoltExecutorPoolPrintMetrics(true);
 
         LocalCluster cluster = new LocalCluster();
         cluster.submitTopology("word-count", conf, builder.createTopology());

@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private static final Logger LOG = LoggerFactory.getLogger(ScheduledExecutorPool.class);
     private static final Random RAND = new Random();
-    private static long totalTimeNsPerBatch = 10 * 1000 * 1000; // 10ms
+    private static long totalTimeNsPerBatch = 1000 * 1000; // 1ms
 
     private class BoltConsumer extends Thread {
         private volatile boolean running;
@@ -40,7 +40,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         public void run() {
             while (running) {
                 try {
-                    List<BoltTask> tasks = getTask(maxTasks);
+                    List<BoltTask> tasks = getTask();
                     for (BoltTask task : tasks) {
                         task.run();
                         if (task.shouldRecordCost()) {
@@ -76,7 +76,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final List<BoltConsumer> consumers;
     private final AtomicInteger consumerIndex = new AtomicInteger(0);
     private final ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues;
-    private final int maxTasks;
     private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(1000);
     private TaskQueueOptimizer taskQueueOptimizer;
     private WorkerOptimizer workerOptimizer;
@@ -90,11 +89,11 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
 
     public ScheduledExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
         this(systemMonitor, topologyId, topologyConf, SystemMonitor.CPU_CORE_NUM,
-                2 * SystemMonitor.CPU_CORE_NUM, 1, 1);
+                2 * SystemMonitor.CPU_CORE_NUM, 1);
     }
 
     public ScheduledExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf,
-                                 int coreConsumers, int maxConsumers, int maxWorkers, int maxTasks) {
+                                 int coreConsumers, int maxConsumers, int maxWorkers) {
         this.systemMonitor = systemMonitor;
         this.topologyId = topologyId;
         this.topologyConf = topologyConf;
@@ -105,7 +104,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.maxWorkers = maxWorkers;
         this.taskQueues = new ConcurrentHashMap<>(coreConsumers);
         this.consumers = new ArrayList<>(coreConsumers);
-        this.maxTasks = maxTasks;
         this.optimizePool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, true);
         this.optimizeWorker = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_ENABLE_WORKERS_OPTIMIZE, true);
         if (this.optimizePool && topologyConf.containsKey(Config.BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY)) {
@@ -140,7 +138,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
     }
 
-    private List<BoltTask> getTask(int maxTaskSize) throws InterruptedException {
+    private List<BoltTask> getTask() throws InterruptedException {
         lock.lock();
         try {
             while (bolts.isEmpty()) {
@@ -179,7 +177,10 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 }
             }
             List<BoltTask> tasks = new ArrayList<>();
-            while (!queue.isEmpty() && tasks.size() < maxTaskSize) {
+            double avgTimeNs = executor.getMonitor().getAvgTimeNs();
+            int batchSize = avgTimeNs <= 10 ? 1 : (int) (totalTimeNsPerBatch / avgTimeNs);
+            batchSize = Math.max(1, batchSize);
+            while (!queue.isEmpty() && tasks.size() < batchSize) {
                 tasks.add(queue.remove());
             }
             if (optimizePool && optimizeSample.getAsBoolean()) {

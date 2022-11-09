@@ -69,6 +69,10 @@ public class ScheduledStrategy {
                               BoltExecutorMonitor monitor1,
                               long currentNs,
                               Strategy strategy) {
+        int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+        if (check != 2) {
+            return check;
+        }
         if (strategy == ScheduledStrategy.Strategy.Fair) {
             return ScheduledStrategy.fair(queue0, queue1, monitor0, monitor1, currentNs);
         } else if (strategy == ScheduledStrategy.Strategy.OnlyQueue) {
@@ -81,6 +85,34 @@ public class ScheduledStrategy {
             return ScheduledStrategy.queueAndCostAndWait(queue0, queue1, monitor0, monitor1, currentNs);
         }
         return 0;
+    }
+
+    public static int check(ResizableBlockingQueue<BoltTask> queue0,
+                            ResizableBlockingQueue<BoltTask> queue1,
+                            BoltExecutorMonitor monitor0,
+                            BoltExecutorMonitor monitor1,
+                            long currentNs) {
+        int remainCapacity0 = queue0.remainingCapacity();
+        int remainCapacity1 = queue1.remainingCapacity();
+        if (remainCapacity0 <= 0 && remainCapacity1 <= 0) {
+            return 0;
+        } else if (remainCapacity0 <= 0) {
+            return 1;
+        } else if (remainCapacity1 <= 0) {
+            return -1;
+        }
+
+        long waiting0 = monitor0.getWaitingTime(currentNs);
+        long waiting1 = monitor1.getWaitingTime(currentNs);
+        final long delta = 50 * 1000 * 1000; //50ms
+        if (waiting0 >= delta && waiting1 >= delta) {
+            return 0;
+        } else if (waiting0 >= delta) {
+            return 1;
+        } else if (waiting1 >= delta) {
+            return -1;
+        }
+        return 2;
     }
 
     public static int fair(ResizableBlockingQueue<BoltTask> queue0,

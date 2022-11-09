@@ -257,9 +257,8 @@ public class WorkerState {
                     (long) Runtime.getRuntime().availableProcessors());
             long maxConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, coreConsumers);
             long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_MAX_WORKER_NUM, 1L);
-            long maxTasks = (Long)  topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_BATCH_SIZE, 1L);
             this.boltExecutorPool = new ScheduledExecutorPool(systemMonitor, topologyId, topologyConf,
-                    (int) coreConsumers, (int) maxConsumers, (int) maxWorkers, (int) maxTasks);
+                    (int) coreConsumers, (int) maxConsumers, (int) maxWorkers);
             boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
             BoltTask.setEnablePrintMetrics(printMetrics);
         }

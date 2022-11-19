@@ -13,6 +13,7 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import org.apache.storm.Config;
+import org.apache.storm.daemon.LoadType;
 import org.apache.storm.daemon.OverLoadChecker;
 import org.apache.storm.daemon.WorkerOptimizer;
 import org.apache.storm.daemon.worker.SystemMonitor;
@@ -79,8 +80,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(1000);
     private TaskQueueOptimizer taskQueueOptimizer;
     private WorkerOptimizer workerOptimizer;
-    private long lastTimeNsUpdateConsumer = System.nanoTime();
-    private long timeIntervalNsUpdateConsumer = 5000L * 1000 * 1000; //5s
+    private Thread consumerOptimizer;
     private final int minQueueCapacity;
     private final boolean optimizePool;
     private final boolean optimizeWorker;
@@ -116,6 +116,9 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.strategy = ScheduledStrategy.Strategy.valueOf(strategyName);
         while (consumers.size() < coreConsumers) {
             addConsumer();
+        }
+        if (optimizePool) {
+            startOptimizeConsumer();
         }
         if (this.optimizeWorker) {
             startWorkerOptimizer();
@@ -183,10 +186,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             while (!queue.isEmpty() && tasks.size() < batchSize) {
                 tasks.add(queue.remove());
             }
-            if (optimizePool && optimizeSample.getAsBoolean()) {
-                optimizeConsumer(currentNs);
-                taskQueueOptimizer.optimize();
-            }
             return tasks;
         } finally {
             lock.unlock();
@@ -227,9 +226,17 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         for (BoltConsumer consumer : consumers) {
             consumer.close();
         }
+        if (this.consumerOptimizer != null) {
+            this.consumerOptimizer.interrupt();
+        }
     }
 
     public void submit(String threadName, BoltTask task) {
+        if (optimizePool && optimizeSample.getAsBoolean()) {
+            lock.lock();
+            taskQueueOptimizer.optimize();
+            lock.unlock();
+        }
         try {
             taskQueues.get(threadName).put(task);
         } catch (InterruptedException e) {
@@ -278,11 +285,26 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
     }
 
+    private void startOptimizeConsumer() {
+        consumerOptimizer = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                lock.lock();
+                optimizeConsumer();
+                lock.unlock();
+            }
+        });
+        consumerOptimizer.setDaemon(true);
+        consumerOptimizer.start();
+    }
+
     // thread-unsafe
-    private void optimizeConsumer(long currentNs) {
-        if (consumers.size() >= maxConsumers
-                || taskQueues.size() == 0
-                || currentNs < lastTimeNsUpdateConsumer + timeIntervalNsUpdateConsumer) {
+    private void optimizeConsumer() {
+        if (consumers.size() >= maxConsumers || taskQueues.size() == 0) {
             return;
         }
         int queueNum = taskQueues.size();
@@ -293,20 +315,18 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
         }
         int sumCapacity = Arrays.stream(capacities).sum();
-        boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
-        boolean isLowLoad = !isOverLoad && Arrays.stream(workloads).anyMatch(t -> t < 0.1);
+        boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.9);
+        boolean isLowLoad = Arrays.stream(workloads).allMatch(t -> t < 0.1);
         boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.5 * sumCapacity;
         if ((!isOverLoad && !isLowLoad) || hasRemainCapacity) {
             return;
         }
         double cpuUsage = systemMonitor.getCpuUsage();
-        if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.7) {
+        if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.8) {
             addConsumer();
-            lastTimeNsUpdateConsumer = currentNs;
             LOG.info("optimize consumer. Added a new consumer");
         } else if (isLowLoad && consumers.size() > coreConsumers) {
             removeConsumer();
-            lastTimeNsUpdateConsumer = currentNs;
             LOG.info("optimize consumer. Removed a consumer");
         }
     }
@@ -320,7 +340,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         String topologyName = StringUtils.join(Arrays.copyOfRange(parts, 0, parts.length - 2), "-");
         this.workerOptimizer = new WorkerOptimizer(topologyName, topologyConf, maxWorkers, new OverLoadChecker() {
             @Override
-            public boolean isOverLoad() {
+            public LoadType getLoadType() {
                 lock.lock();
                 try {
                     int[] capacities = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
@@ -329,11 +349,16 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                     for (int  i = 0; i < taskQueues.size(); i++) {
                         workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
                     }
-                    int sumCapacity = Arrays.stream(capacities).sum();
-                    boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
-                    boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.1 * sumCapacity;
+                    boolean isQueueHighLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.9);
+                    boolean isQueueLowLoad = Arrays.stream(workloads).allMatch(t -> t < 0.1);
                     double cpuUsage = systemMonitor.getCpuUsage();
-                    return isOverLoad && !hasRemainCapacity && cpuUsage > 0.5;
+                    if (isQueueHighLoad && cpuUsage > 0.7) {
+                        return LoadType.High;
+                    } else if (isQueueLowLoad && cpuUsage < 0.1) {
+                        return LoadType.Low;
+                    } else {
+                        return LoadType.Mid;
+                    }
                 } finally {
                     lock.unlock();
                 }

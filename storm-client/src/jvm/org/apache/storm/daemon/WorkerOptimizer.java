@@ -20,9 +20,12 @@ public class WorkerOptimizer implements Shutdownable {
     private final int maxWorkers;
     private final long timeInterval = 10;
     private final long optimizeTimeInterval = 120 * 1000;
-    private long lastOptimizeTime = -1;
-    private final Queue<Long> overloadTimes = new LinkedList<>();
-    private final Queue<Long> normalTimes = new LinkedList<>();
+    private final double highLoadThreshold = 0.75;
+    private final double lowLoadThreshold = 0.75;
+    private long lastOptimizeTime = System.currentTimeMillis();
+    private final Queue<Long> highLoadRecords = new LinkedList<>();
+    private final Queue<Long> midLoadRecords = new LinkedList<>();
+    private final Queue<Long> lowLoadRecords = new LinkedList<>();
     private final OverLoadChecker checker;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
@@ -33,12 +36,12 @@ public class WorkerOptimizer implements Shutdownable {
         this.checker = checker;
     }
 
-    private void optimize() {
+    private void optimize(int increase) {
         long workerNum = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_WORKERS, 1);
-        if (workerNum >= maxWorkers) {
+        final int newWorkerNum = (int) workerNum + increase;
+        if (newWorkerNum > maxWorkers || newWorkerNum < 1) {
             return;
         }
-        final int newWorkerNum = (int) workerNum + 1;
         final RebalanceOptions rebalanceOptions = new RebalanceOptions();
         rebalanceOptions.set_num_workers(newWorkerNum);
         LOG.info("Set number of workers of topology {} to {}", topologyName, newWorkerNum);
@@ -55,27 +58,37 @@ public class WorkerOptimizer implements Shutdownable {
     public void start() {
         executor.scheduleAtFixedRate(() -> {
             long current;
-            if (checker.isOverLoad()) {
-                current = System.currentTimeMillis();
-                overloadTimes.add(current);
-            } else {
-                current = System.currentTimeMillis();
-                normalTimes.add(current);
+            LoadType loadType = checker.getLoadType();
+            current = System.currentTimeMillis();
+            if (loadType == LoadType.High) {
+                highLoadRecords.add(current);
+            } else if (loadType == LoadType.Mid) {
+                midLoadRecords.add(current);
+            } else if (loadType == LoadType.Low) {
+                lowLoadRecords.add(current);
             }
-            if (lastOptimizeTime <= 0) {
-                lastOptimizeTime = current;
+            while (!highLoadRecords.isEmpty() && highLoadRecords.peek() + optimizeTimeInterval < current) {
+                highLoadRecords.remove();
             }
-            while (!overloadTimes.isEmpty() && overloadTimes.peek() + optimizeTimeInterval < current) {
-                overloadTimes.remove();
+            while (!midLoadRecords.isEmpty() && midLoadRecords.peek() + optimizeTimeInterval < current) {
+                midLoadRecords.remove();
             }
-            while (!normalTimes.isEmpty() && normalTimes.peek() + optimizeTimeInterval < current) {
-                normalTimes.remove();
+            while (!lowLoadRecords.isEmpty() && lowLoadRecords.peek() + optimizeTimeInterval < current) {
+                lowLoadRecords.remove();
             }
-            if (overloadTimes.size() > 3 * normalTimes.size() && current > lastOptimizeTime + optimizeTimeInterval) {
-                optimize();
-                overloadTimes.clear();
-                normalTimes.clear();
-                lastOptimizeTime = current;
+            if (current > lastOptimizeTime + optimizeTimeInterval) {
+                int totalRecords = highLoadRecords.size() + midLoadRecords.size() + lowLoadRecords.size();
+                if (highLoadRecords.size() > highLoadThreshold * totalRecords) {
+                    optimize(1);
+                    highLoadRecords.clear();
+                    midLoadRecords.clear();
+                    lastOptimizeTime = current;
+                } else if (lowLoadRecords.size() > lowLoadThreshold * totalRecords) {
+                    optimize(-1);
+                    highLoadRecords.clear();
+                    midLoadRecords.clear();
+                    lastOptimizeTime = current;
+                }
             }
         }, timeInterval, timeInterval, TimeUnit.MILLISECONDS);
     }

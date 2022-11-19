@@ -299,7 +299,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         if ((!isOverLoad && !isLowLoad) || hasRemainCapacity) {
             return;
         }
-        double cpuUsage = systemMonitor.getAvgCpuUsage();
+        double cpuUsage = systemMonitor.getCpuUsage();
         if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.7) {
             addConsumer();
             lastTimeNsUpdateConsumer = currentNs;
@@ -332,8 +332,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                     int sumCapacity = Arrays.stream(capacities).sum();
                     boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.95);
                     boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.1 * sumCapacity;
-                    //TODO add cpu usage?
-                    return isOverLoad && !hasRemainCapacity;
+                    double cpuUsage = systemMonitor.getCpuUsage();
+                    return isOverLoad && !hasRemainCapacity && cpuUsage > 0.5;
                 } finally {
                     lock.unlock();
                 }

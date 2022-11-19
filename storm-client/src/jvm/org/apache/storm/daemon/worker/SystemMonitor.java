@@ -1,45 +1,61 @@
 package org.apache.storm.daemon.worker;
 
 import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.storm.daemon.Shutdownable;
 import oshi.SystemInfo;
 import oshi.hardware.CentralProcessor;
 
-public class SystemMonitor {
+public class SystemMonitor implements Shutdownable {
     public static final int CPU_CORE_NUM = Runtime.getRuntime().availableProcessors();
+    private static final long TIME_SPAN_MS = 1000;
     private final ReentrantLock lock = new ReentrantLock();
-    private final SystemInfo systemInfo;
     private final CentralProcessor systemInfoProcessor;
-    private long[] oldTicks;
-    private long oldTicksTime;
-    private double preResult = -1.0;
+    private final Thread cpuUpdater;
+    private long[] preTicks;
+    private volatile boolean cpuUpdaterRunning;
+    private double cpuUsage = 0.0;
 
     public SystemMonitor() {
-        this.systemInfo = new SystemInfo();
-        this.systemInfoProcessor = this.systemInfo.getHardware().getProcessor();
-        this.oldTicks = this.systemInfoProcessor.getSystemCpuLoadTicks();
-        this.oldTicksTime = System.currentTimeMillis();
+        SystemInfo systemInfo = new SystemInfo();
+        this.systemInfoProcessor = systemInfo.getHardware().getProcessor();
+        this.preTicks = this.systemInfoProcessor.getSystemCpuLoadTicks();
+        this.cpuUpdaterRunning = true;
+        this.cpuUpdater = new Thread(() -> {
+            final int idleIndex = CentralProcessor.TickType.IDLE.getIndex();
+            while (cpuUpdaterRunning) {
+                try {
+                    Thread.sleep(TIME_SPAN_MS);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                lock.lock();
+                try {
+                    long[] ticks = this.systemInfoProcessor.getSystemCpuLoadTicks();
+                    long total = 0;
+                    for (int i = 0; i < ticks.length; i++) {
+                        total += ticks[i] - preTicks[i];
+                    }
+                    if (total == 0) {
+                        continue;
+                    }
+                    long idle = ticks[idleIndex] - preTicks[idleIndex];
+                    cpuUsage = 1 - (double) idle / (double) total;
+                    preTicks = ticks;
+                } finally {
+                    lock.unlock();
+                }
+            }
+
+        });
+        this.cpuUpdater.setDaemon(true);
+        this.cpuUpdater.start();
     }
 
-    /**
-     * get the average cpu usage between two records. The time interval is bigger than 5s
-     * @return cpu usage.
-     */
-    public double getAvgCpuUsage() {
+    public double getCpuUsage() {
         lock.lock();
         try {
-            long current = System.currentTimeMillis();
-            if (current - oldTicksTime >= 5000) { // the time interval must be bigger than 5s
-                long[] ticks = this.systemInfoProcessor.getSystemCpuLoadTicks();
-                long total = 0;
-                for (int i = 0; i < ticks.length; i++) {
-                    total += ticks[i] - oldTicks[i];
-                }
-                long idle = ticks[CentralProcessor.TickType.IDLE.getIndex()] - oldTicks[CentralProcessor.TickType.IDLE.getIndex()];
-                oldTicks = ticks;
-                oldTicksTime = current;
-                return (preResult = 1 - (double) idle / (double) total);
-            }
-            return preResult;
+            return cpuUsage;
         } finally {
             lock.unlock();
         }
@@ -51,5 +67,13 @@ public class SystemMonitor {
         double freeMemory = runtime.freeMemory();
         double totalMemory = runtime.totalMemory();
         return (totalMemory - freeMemory) / maxMemory;
+    }
+
+    @Override
+    public void shutdown() {
+        if (cpuUpdater != null) {
+            this.cpuUpdaterRunning = false;
+            cpuUpdater.interrupt();
+        }
     }
 }

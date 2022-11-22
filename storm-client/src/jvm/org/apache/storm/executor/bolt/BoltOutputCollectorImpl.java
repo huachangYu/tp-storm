@@ -13,6 +13,7 @@
 package org.apache.storm.executor.bolt;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import org.apache.storm.daemon.Task;
 import org.apache.storm.executor.ExecutorTransfer;
 import org.apache.storm.hooks.info.BoltAckInfo;
 import org.apache.storm.hooks.info.BoltFailInfo;
+import org.apache.storm.shade.org.apache.commons.collections.CollectionUtils;
 import org.apache.storm.task.IOutputCollector;
 import org.apache.storm.tuple.AddressedTuple;
 import org.apache.storm.tuple.MessageId;
@@ -107,8 +109,10 @@ public class BoltOutputCollectorImpl implements IOutputCollector {
             } else {
                 msgId = MessageId.makeUnanchored();
             }
-            TupleImpl tupleExt = new TupleImpl(
-                executor.getWorkerTopologyContext(), values, executor.getComponentId(), taskId, streamId, msgId);
+            long tupleRootId = CollectionUtils.isEmpty(anchors) ? TupleImpl.generateCurrentRootId() :
+                    anchors.stream().mapToLong(Tuple::getRootId).max().getAsLong();
+            TupleImpl tupleExt = new TupleImpl( executor.getWorkerTopologyContext(), values,
+                    executor.getComponentId(), taskId, streamId, msgId, tupleRootId);
             xsfer.tryTransfer(new AddressedTuple(t, tupleExt), executor.getPendingEmits());
         }
         if (isEventLoggers) {

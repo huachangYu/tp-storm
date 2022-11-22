@@ -18,6 +18,12 @@ import org.apache.storm.generated.GlobalStreamId;
 import org.apache.storm.task.GeneralTopologyContext;
 
 public class TupleImpl implements Tuple {
+    private static long CURRENT_ROOT_ID = 0;
+
+    public static long generateCurrentRootId() {
+        return ++CURRENT_ROOT_ID;
+    }
+
     private final String srcComponent;
     private List<Object> values;
     private int taskId;
@@ -27,6 +33,7 @@ public class TupleImpl implements Tuple {
     private Long processSampleStartTime;
     private Long executeSampleStartTime;
     private long outAckVal = 0;
+    private long rootId = 0;
 
     public TupleImpl(Tuple t) {
         this.values = t.getValues();
@@ -43,6 +50,12 @@ public class TupleImpl implements Tuple {
         } catch (ClassCastException e) {
             // ignore ... if t is not a TupleImpl type .. faster than checking and then casting
         }
+    }
+
+    public TupleImpl(GeneralTopologyContext context, List<Object> values, String srcComponent,
+                     int taskId, String streamId, MessageId id, long rootId) {
+        this(context, values, srcComponent, taskId, streamId, id);
+        this.rootId = rootId;
     }
 
     public TupleImpl(GeneralTopologyContext context, List<Object> values, String srcComponent, int taskId, String streamId, MessageId id) {
@@ -89,6 +102,16 @@ public class TupleImpl implements Tuple {
 
     public long getAckVal() {
         return outAckVal;
+    }
+
+    @Override
+    public long getRootId() {
+        return rootId;
+    }
+
+    @Override
+    public void setRootId(long rootId) {
+        this.rootId = rootId;
     }
 
     @Override

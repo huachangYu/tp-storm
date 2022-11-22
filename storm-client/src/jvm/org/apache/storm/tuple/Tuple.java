@@ -56,4 +56,8 @@ public interface Tuple extends ITuple {
      * Gets the topology context associated with the tuple.
      */
     GeneralTopologyContext getContext();
+
+    void setRootId(long rootId);
+
+    long getRootId();
 }

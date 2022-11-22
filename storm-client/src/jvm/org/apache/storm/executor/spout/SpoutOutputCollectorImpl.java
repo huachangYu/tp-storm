@@ -135,7 +135,8 @@ public class SpoutOutputCollectorImpl implements ISpoutOutputCollector {
             }
 
             final TupleImpl tuple =
-                new TupleImpl(executor.getWorkerTopologyContext(), values, executor.getComponentId(), this.taskId, stream, msgId);
+                new TupleImpl(executor.getWorkerTopologyContext(), values, executor.getComponentId(),
+                        this.taskId, stream, msgId, TupleImpl.generateCurrentRootId());
             AddressedTuple adrTuple = new AddressedTuple(t, tuple);
             executor.getExecutorTransfer().tryTransfer(adrTuple, executor.getPendingEmits());
         }

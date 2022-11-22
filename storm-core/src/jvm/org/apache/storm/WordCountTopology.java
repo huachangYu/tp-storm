@@ -112,7 +112,7 @@ public class WordCountTopology {
         conf.useBoltExecutorPool(true);
         conf.setBoltExecutorPoolCoreConsumers(2);
         conf.setBoltExecutorPoolMaxConsumers(4);
-        conf.setBoltExecutorPoolStrategy(ScheduledStrategy.Strategy.QueueAndCostAndWait.name());
+        conf.setBoltExecutorPoolStrategy(ScheduledStrategy.Strategy.OnlyQueue.name());
         conf.setBoltExecutorPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
         conf.enableBoltExecutorPoolOptimize(true);

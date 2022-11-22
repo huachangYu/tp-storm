@@ -317,7 +317,7 @@ public abstract class Executor implements Callable, JCQueue.Consumer {
                 }
             };
             if (useThreadPool) {
-                boltExecutorPool.submit(getName(), new BoltTask(task, monitor, getName(), monitor.shouldRecordCost()));
+                boltExecutorPool.submit(getName(), new BoltTask(task, tuple, monitor, getName(), monitor.shouldRecordCost()));
             } else {
                 task.run();
             }

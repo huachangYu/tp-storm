@@ -78,7 +78,7 @@ public class BoltExecutor extends Executor {
         this.stats = new BoltExecutorStats(ConfigUtils.samplingRate(this.getTopoConf()),
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
         this.useThreadPool = false;
-        this.monitor = new BoltExecutorMonitor();
+        this.monitor = new BoltExecutorMonitor(getName());
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {

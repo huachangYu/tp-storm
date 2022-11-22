@@ -2,6 +2,7 @@ package org.apache.storm.executor;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.apache.storm.utils.ResizableBlockingQueue;
 import org.slf4j.Logger;
@@ -15,9 +16,9 @@ public class TaskQueueOptimizer {
     private double lowloadThreshold;
     private double expandThreshold;
     private double reduceThreshold;
-    private ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues;
+    private ConcurrentHashMap<String, TaskQueue> taskQueues;
 
-    public TaskQueueOptimizer(ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues,
+    public TaskQueueOptimizer(ConcurrentHashMap<String, TaskQueue> taskQueues,
                               int minCapacity,
                               int totalCapacity,
                               double overloadThreshold,
@@ -35,11 +36,11 @@ public class TaskQueueOptimizer {
 
     public int getRemainCapacity() {
         return totalCapacity - taskQueues.values().stream()
-                .mapToInt(ResizableBlockingQueue::getCapacity).sum();
+                .mapToInt(t -> t.getQueue().getCapacity()).sum();
     }
 
     public boolean expandIfNeeded(String queueName) {
-        ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+        ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName).getQueue();
         if (queue == null) {
             return false;
         }
@@ -58,7 +59,7 @@ public class TaskQueueOptimizer {
     }
 
     public boolean reduceIfNeeded(String queueName) {
-        ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName);
+        ResizableBlockingQueue<BoltTask> queue = taskQueues.get(queueName).getQueue();
         if (queue == null) {
             return false;
         }
@@ -82,8 +83,12 @@ public class TaskQueueOptimizer {
         if (printInfo) {
             LOG.info("optimize queue size. queue info: {}.",
                     Arrays.toString(taskQueues.entrySet().stream()
-                            .map(t -> String.format("\"%s\":(%d/%d)",
-                                    t.getKey(), t.getValue().size(), t.getValue().getCapacity())).toArray()));
+                            .map(t -> {
+                                ResizableBlockingQueue<BoltTask> queue = t.getValue().getQueue();
+                                return String.format("\"%s\":(%d/%d)",
+                                        t.getKey(), queue.size(), queue.getCapacity());
+                            }).collect(Collectors.toList()).toArray())
+            );
         }
     }
 }

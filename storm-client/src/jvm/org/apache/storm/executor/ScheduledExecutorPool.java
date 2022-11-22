@@ -76,7 +76,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final AtomicInteger blockedConsumerNum = new AtomicInteger();
     private final List<BoltConsumer> consumers;
     private final AtomicInteger consumerIndex = new AtomicInteger(0);
-    private final ConcurrentHashMap<String, ResizableBlockingQueue<BoltTask>> taskQueues;
+    private final ConcurrentHashMap<String, TaskQueue> taskQueues;
     private final BooleanSupplier optimizeSample = ConfigUtils.sequenceSample(1000);
     private TaskQueueOptimizer taskQueueOptimizer;
     private WorkerOptimizer workerOptimizer;
@@ -84,7 +84,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final int minQueueCapacity;
     private final boolean optimizePool;
     private final boolean optimizeWorker;
-    private final ScheduledStrategy.Strategy strategy;
+    private final IScheduleStrategy strategy;
     private Thread metricsThread;
 
     public ScheduledExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
@@ -113,7 +113,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
         String strategyName = (String) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_STRATEGY,
                 ScheduledStrategy.Strategy.Fair.name());
-        this.strategy = ScheduledStrategy.Strategy.valueOf(strategyName);
+        this.strategy = ScheduledStrategy.getStrategy(strategyName);
         while (consumers.size() < coreConsumers) {
             addConsumer();
         }
@@ -148,14 +148,14 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 emptyThreadWait.await();
             }
             List<BoltExecutor> notEmptyThreads = bolts.stream()
-                    .filter(t -> taskQueues.get(t.getName()).size() > 0)
+                    .filter(t -> taskQueues.get(t.getName()).getQueue().size() > 0)
                     .collect(Collectors.toList());
             while (notEmptyThreads.isEmpty()) {
                 blockedConsumerNum.getAndIncrement();
                 emptyQueueWait.await();
                 blockedConsumerNum.getAndDecrement();
                 notEmptyThreads = bolts.stream()
-                        .filter(t -> taskQueues.get(t.getName()).size() > 0)
+                        .filter(t -> taskQueues.get(t.getName()).getQueue().size() > 0)
                         .collect(Collectors.toList());
             }
 
@@ -165,24 +165,23 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 startExecutorThread = RAND.nextInt(threadsNum);
             }
             BoltExecutor executor = notEmptyThreads.get(startExecutorThread);
-            ResizableBlockingQueue<BoltTask> queue = taskQueues.get(executor.getName());
+            TaskQueue taskQueue = taskQueues.get(executor.getName());
             final long currentNs = System.nanoTime();
             for (int i = 0; i < threadsNum; i++) {
                 if (i == startExecutorThread) {
                     continue;
                 }
                 BoltExecutor tmpExecutor = notEmptyThreads.get(i);
-                ResizableBlockingQueue<BoltTask> tmpQueue = taskQueues.get(tmpExecutor.getName());
-                if (ScheduledStrategy.compare(queue, tmpQueue, executor.getMonitor(), tmpExecutor.getMonitor(),
-                        currentNs, strategy) > 0) {
-                    queue = tmpQueue;
+                TaskQueue tmpTaskQueue = taskQueues.get(tmpExecutor.getName());
+                if (strategy.compare(taskQueue, tmpTaskQueue, currentNs) < 0) {
+                    taskQueue = tmpTaskQueue;
                     executor = tmpExecutor;
                 }
             }
+            ResizableBlockingQueue<BoltTask> queue = taskQueue.getQueue();
             List<BoltTask> tasks = new ArrayList<>();
             double avgTimeNs = executor.getMonitor().getAvgTimeNs();
-            int batchSize = avgTimeNs <= 10 ? 1 : (int) (totalTimeNsPerBatch / avgTimeNs);
-            batchSize = Math.max(1, batchSize);
+            int batchSize = avgTimeNs <= 10 ? 1 : (int) Math.max(1, Math.ceil(totalTimeNsPerBatch / avgTimeNs));
             while (!queue.isEmpty() && tasks.size() < batchSize) {
                 tasks.add(queue.remove());
             }
@@ -200,7 +199,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 return;
             }
             bolts.add(thread);
-            taskQueues.put(threadName, new ResizableBlockingQueue<>(minQueueCapacity));
+            taskQueues.put(threadName, new TaskQueue(minQueueCapacity, thread.getMonitor()));
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -238,7 +237,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             lock.unlock();
         }
         try {
-            taskQueues.get(threadName).put(task);
+            taskQueues.get(threadName).getQueue().put(task);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -308,8 +307,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             return;
         }
         int queueNum = taskQueues.size();
-        int[] capacities = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
-        int[] sizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
+        int[] capacities = taskQueues.values().stream().mapToInt(t -> t.getQueue().getCapacity()).toArray();
+        int[] sizes = taskQueues.values().stream().mapToInt(t -> t.getQueue().size()).toArray();
         double[] workloads = new double[queueNum];
         for (int  i = 0; i < queueNum; i++) {
             workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
@@ -343,8 +342,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             public LoadType getLoadType() {
                 lock.lock();
                 try {
-                    int[] capacities = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::getCapacity).toArray();
-                    int[] sizes = taskQueues.values().stream().mapToInt(ResizableBlockingQueue::size).toArray();
+                    int[] capacities = taskQueues.values().stream().mapToInt(t -> t.getQueue().getCapacity()).toArray();
+                    int[] sizes = taskQueues.values().stream().mapToInt(t -> t.getQueue().size()).toArray();
                     double[] workloads = new double[taskQueues.size()];
                     for (int  i = 0; i < taskQueues.size(); i++) {
                         workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
@@ -371,9 +370,13 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         lock.lock();
         try {
             // print queue info
-            LOG.info("queue info: {}.", Arrays.toString(taskQueues.entrySet().stream()
-                    .map(t -> String.format("\"%s\":(%d/%d)",
-                            t.getKey(), t.getValue().size(), t.getValue().getCapacity())).toArray()));
+            List<String> queueInfos = taskQueues.entrySet().stream()
+                    .map(t -> {
+                        ResizableBlockingQueue<BoltTask> queue = t.getValue().getQueue();
+                        return String.format("\"%s\":(%d/%d)",
+                                t.getKey(), queue.size(), queue.getCapacity());
+                    }).collect(Collectors.toList());
+            LOG.info("queue info: {}.", Arrays.toString(queueInfos.toArray()));
         } finally {
             lock.unlock();
         }

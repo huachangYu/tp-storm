@@ -6,6 +6,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.storm.executor.bolt.BoltExecutorMonitor;
+import org.apache.storm.tuple.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +20,8 @@ public class BoltTask {
     private static Map<String, Long> lastPrintTimeNs = new HashMap<>();
     private static Map<String, Long> totalCount = new HashMap<>();
 
-    private Runnable task;
+    private final Runnable task;
+    private final Tuple tuple;
     private final BoltExecutorMonitor monitor;
     private final boolean recordCost;
     private final String threadName;
@@ -27,19 +29,16 @@ public class BoltTask {
     private long startTimeNs;
     private long endTimeNs;
 
-    private BoltTask(BoltExecutorMonitor monitor, String threadName, boolean recordCost) {
+    public BoltTask(Runnable task, Tuple tuple, BoltExecutorMonitor monitor, String threadName,
+                    boolean recordCost) {
         this.monitor = monitor;
         this.threadName = threadName;
         this.recordCost = recordCost;
         if (shouldRecord()) {
             this.createTimeNs = System.nanoTime();
         }
-    }
-
-    public BoltTask(Runnable task, BoltExecutorMonitor monitor, String threadName,
-                    boolean needToRecord) {
-        this(monitor, threadName, needToRecord);
         this.task = task;
+        this.tuple = tuple;
     }
 
     public static void setEnablePrintMetrics(boolean enablePrintMetrics) {
@@ -52,6 +51,10 @@ public class BoltTask {
 
     public BoltExecutorMonitor getMonitor() {
         return monitor;
+    }
+
+    public long getRootId() {
+        return tuple.getRootId();
     }
 
     public void run() {

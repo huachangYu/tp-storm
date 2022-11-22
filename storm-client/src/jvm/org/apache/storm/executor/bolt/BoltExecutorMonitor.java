@@ -12,11 +12,17 @@ public class BoltExecutorMonitor {
     private long lastTimeNs = System.nanoTime();
     private final int windowsSize = 100;
     private final ReentrantLock costLock = new ReentrantLock();
+    private final String executorName;
     private final Queue<Long> costTimeNsQueue = new LinkedList<>();
     private final AtomicLong totalTimeNs = new AtomicLong(0);
     private final BooleanSupplier costSampler = ConfigUtils.evenSampler(10);
 
-    public BoltExecutorMonitor() {
+    public BoltExecutorMonitor(String executorName) {
+        this.executorName = executorName;
+    }
+
+    public String getExecutorName() {
+        return executorName;
     }
 
     public void recordCost(long ns) {

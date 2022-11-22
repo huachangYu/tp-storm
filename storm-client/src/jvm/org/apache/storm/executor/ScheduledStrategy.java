@@ -10,81 +10,118 @@ public class ScheduledStrategy {
 
     public static class FairStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableBlockingQueue<BoltTask> queue0,
-                           ResizableBlockingQueue<BoltTask> queue1,
-                           BoltExecutorMonitor monitor0,
-                           BoltExecutorMonitor monitor1,
-                           long currentNs) {
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            ResizableBlockingQueue<BoltTask> queue0 = taskQueue0.getQueue();
+            BoltExecutorMonitor monitor0 = taskQueue0.getMonitor();
+            ResizableBlockingQueue<BoltTask> queue1 = taskQueue1.getQueue();
+            BoltExecutorMonitor monitor1 = taskQueue0.getMonitor();
+            int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+            if (check != 2) {
+                return check;
+            }
             return fair(queue0, queue1, monitor0, monitor1, currentNs);
         }
     }
 
     public static class OnlyQueueStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableBlockingQueue<BoltTask> queue0,
-                           ResizableBlockingQueue<BoltTask> queue1,
-                           BoltExecutorMonitor monitor0,
-                           BoltExecutorMonitor monitor1,
-                           long currentNs) {
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            ResizableBlockingQueue<BoltTask> queue0 = taskQueue0.getQueue();
+            BoltExecutorMonitor monitor0 = taskQueue0.getMonitor();
+            ResizableBlockingQueue<BoltTask> queue1 = taskQueue1.getQueue();
+            BoltExecutorMonitor monitor1 = taskQueue0.getMonitor();
+            int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+            if (check != 2) {
+                return check;
+            }
             return onlyQueue(queue0, queue1, monitor0, monitor1, currentNs);
         }
     }
 
     public static class QueueAndCostStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableBlockingQueue<BoltTask> queue0,
-                           ResizableBlockingQueue<BoltTask> queue1,
-                           BoltExecutorMonitor monitor0,
-                           BoltExecutorMonitor monitor1,
-                           long currentNs) {
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            ResizableBlockingQueue<BoltTask> queue0 = taskQueue0.getQueue();
+            BoltExecutorMonitor monitor0 = taskQueue0.getMonitor();
+            ResizableBlockingQueue<BoltTask> queue1 = taskQueue1.getQueue();
+            BoltExecutorMonitor monitor1 = taskQueue0.getMonitor();
+            int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+            if (check != 2) {
+                return check;
+            }
             return queueAndCost(queue0, queue1, monitor0, monitor1, currentNs);
         }
     }
 
     public static class QueueAndWaitStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableBlockingQueue<BoltTask> queue0,
-                           ResizableBlockingQueue<BoltTask> queue1,
-                           BoltExecutorMonitor monitor0,
-                           BoltExecutorMonitor monitor1,
-                           long currentNs) {
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            ResizableBlockingQueue<BoltTask> queue0 = taskQueue0.getQueue();
+            BoltExecutorMonitor monitor0 = taskQueue0.getMonitor();
+            ResizableBlockingQueue<BoltTask> queue1 = taskQueue1.getQueue();
+            BoltExecutorMonitor monitor1 = taskQueue0.getMonitor();
+            int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+            if (check != 2) {
+                return check;
+            }
             return queueAndWait(queue0, queue1, monitor0, monitor1, currentNs);
         }
     }
 
     public static class QueueAndCostAndWaitStrategy implements IScheduleStrategy {
         @Override
-        public int compare(ResizableBlockingQueue<BoltTask> queue0,
-                           ResizableBlockingQueue<BoltTask> queue1,
-                           BoltExecutorMonitor monitor0,
-                           BoltExecutorMonitor monitor1,
-                           long currentNs) {
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            ResizableBlockingQueue<BoltTask> queue0 = taskQueue0.getQueue();
+            BoltExecutorMonitor monitor0 = taskQueue0.getMonitor();
+            ResizableBlockingQueue<BoltTask> queue1 = taskQueue1.getQueue();
+            BoltExecutorMonitor monitor1 = taskQueue0.getMonitor();
+            int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
+            if (check != 2) {
+                return check;
+            }
             return queueAndCostAndWait(queue0, queue1, monitor0, monitor1, currentNs);
         }
     }
 
-    public static int compare(ResizableBlockingQueue<BoltTask> queue0,
-                              ResizableBlockingQueue<BoltTask> queue1,
-                              BoltExecutorMonitor monitor0,
-                              BoltExecutorMonitor monitor1,
-                              long currentNs,
-                              Strategy strategy) {
-        int check = ScheduledStrategy.check(queue0, queue1, monitor0, monitor1, currentNs);
-        if (check != 2) {
-            return check;
+    public static  class LowLatencyStrategy implements IScheduleStrategy {
+
+        @Override
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            long diff = taskQueue1.getFirstRootId() - taskQueue0.getFirstRootId();
+            if (diff == 0) {
+                return 0;
+            }
+            return diff > 0 ? 1 : -1;
         }
+    }
+
+    public static class HighThroughputStrategy implements IScheduleStrategy {
+
+        @Override
+        public int compare(TaskQueue taskQueue0, TaskQueue taskQueue1, long currentNs) {
+            long diff = taskQueue1.getQueue().remainingCapacity() - taskQueue0.getQueue().remainingCapacity();
+            if (diff == 0) {
+                return 0;
+            }
+            return diff > 0 ? 1 : -1;
+        }
+    }
+
+    public static IScheduleStrategy getStrategy(String strategyName) {
+        Strategy strategy = ScheduledStrategy.Strategy.valueOf(strategyName);
         if (strategy == ScheduledStrategy.Strategy.Fair) {
-            return ScheduledStrategy.fair(queue0, queue1, monitor0, monitor1, currentNs);
+            return new FairStrategy();
         } else if (strategy == ScheduledStrategy.Strategy.OnlyQueue) {
-            return ScheduledStrategy.onlyQueue(queue0, queue1, monitor0, monitor1, currentNs);
+            return new OnlyQueueStrategy();
         } else if (strategy == ScheduledStrategy.Strategy.QueueAndCost) {
-            return ScheduledStrategy.queueAndCost(queue0, queue1, monitor0, monitor1, currentNs);
+            return new QueueAndCostStrategy();
         } else if (strategy == ScheduledStrategy.Strategy.QueueAndWait) {
-            return ScheduledStrategy.queueAndWait(queue0, queue1, monitor0, monitor1, currentNs);
+            return new QueueAndWaitStrategy();
         } else if (strategy == ScheduledStrategy.Strategy.QueueAndCostAndWait) {
-            return ScheduledStrategy.queueAndCostAndWait(queue0, queue1, monitor0, monitor1, currentNs);
+            return new QueueAndCostAndWaitStrategy();
+        } else {
+            throw new IllegalArgumentException("unknown strategy");
         }
-        return 0;
     }
 
     public static int check(ResizableBlockingQueue<BoltTask> queue0,
@@ -129,7 +166,11 @@ public class ScheduledStrategy {
                                 BoltExecutorMonitor monitor0,
                                 BoltExecutorMonitor monitor1,
                                 long currentNs) {
-        return queue1.remainingCapacity() - queue0.remainingCapacity();
+        int diff = queue1.remainingCapacity() - queue0.remainingCapacity();
+        if (diff == 0) {
+            return 0;
+        }
+        return diff > 0 ? 1 : -1;
     }
 
     public static int queueAndCost(ResizableBlockingQueue<BoltTask> queue0,

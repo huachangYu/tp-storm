@@ -17,7 +17,7 @@ import org.apache.storm.windowing.TriggerHandler;
 import org.apache.storm.windowing.TriggerPolicy;
 
 /**
- * Strategy for windowing which will have respective trigger and eviction policies.
+ * StrategyType for windowing which will have respective trigger and eviction policies.
  */
 public interface WindowStrategy<T> {
 

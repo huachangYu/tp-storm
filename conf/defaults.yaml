@@ -277,7 +277,7 @@ topology.worker.logwriter.childopts: "-Xmx64m"
 topology.tick.tuple.freq.secs: null
 topology.worker.shared.thread.pool.size: 4
 
-# Spout Wait Strategy - employed when there is no data to produce
+# Spout Wait StrategyType - employed when there is no data to produce
 topology.spout.wait.strategy: "org.apache.storm.policy.WaitStrategyProgressive"
 topology.spout.wait.park.microsec : 100          # park time for org.apache.storm.policy.WaitStrategyPark. Busy spins if set to 0.
 
@@ -285,7 +285,7 @@ topology.spout.wait.progressive.level1.count: 0          # number of iterations 
 topology.spout.wait.progressive.level2.count: 0          # number of iterations to spend in level 2 [parkNanos(1)] of WaitStrategyProgressive, before progressing to level 3
 topology.spout.wait.progressive.level3.sleep.millis: 1   # sleep duration for idling iterations in level 3 of WaitStrategyProgressive
 
-# Bolt Wait Strategy - employed when there is no data in its receive buffer to process
+# Bolt Wait StrategyType - employed when there is no data in its receive buffer to process
 topology.bolt.wait.strategy : "org.apache.storm.policy.WaitStrategyProgressive"
 
 topology.bolt.wait.park.microsec : 100          # park time for org.apache.storm.policy.WaitStrategyPark. Busy spins if set to 0.
@@ -294,7 +294,7 @@ topology.bolt.wait.progressive.level1.count: 1          # number of iterations t
 topology.bolt.wait.progressive.level2.count: 1000       # number of iterations to spend in level 2 [parkNanos(1)] of WaitStrategyProgressive, before progressing to level 3
 topology.bolt.wait.progressive.level3.sleep.millis: 1   # sleep duration for idling iterations in level 3 of WaitStrategyProgressive
 
-# BackPressure Wait Strategy - for any producer (spout/bolt/transfer thread) when the downstream Q is full
+# BackPressure Wait StrategyType - for any producer (spout/bolt/transfer thread) when the downstream Q is full
 topology.backpressure.wait.strategy: "org.apache.storm.policy.WaitStrategyProgressive"
 
 topology.backpressure.wait.park.microsec: 100          #  park time for org.apache.storm.policy.WaitStrategyPark. Busy spins if set to 0.

@@ -48,6 +48,10 @@ public class ResizableBlockingQueue<E> extends LinkedBlockingQueue<E> {
         return capacity;
     }
 
+    public double getLoad() {
+        return (double) size() / (double) Math.max(1, getCapacity());
+    }
+
     @Override
     public boolean offer(E e) {
         if (e == null) {

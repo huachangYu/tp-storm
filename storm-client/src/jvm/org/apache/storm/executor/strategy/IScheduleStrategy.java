@@ -1,5 +1,6 @@
-package org.apache.storm.executor;
+package org.apache.storm.executor.strategy;
 
+import org.apache.storm.executor.TaskQueue;
 import org.apache.storm.executor.bolt.BoltExecutorMonitor;
 import org.apache.storm.utils.ResizableBlockingQueue;
 

@@ -30,7 +30,7 @@ import org.apache.storm.scheduler.resource.SchedulingResult;
 public interface IStrategy {
 
     /**
-     * Prepare the Strategy for scheduling.
+     * Prepare the StrategyType for scheduling.
      *
      * @param config the cluster configuration
      */

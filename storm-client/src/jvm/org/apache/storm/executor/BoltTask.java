@@ -95,7 +95,7 @@ public class BoltTask {
             // print metrics per second
             long waitingTimeNs = totalWaiting.getOrDefault(threadName, 0L);
             long costTimeNs = totalCost.getOrDefault(threadName, 0L);
-            long count = totalCount.getOrDefault(threadName, 1L);
+            long count = Math.max(totalCount.getOrDefault(threadName, 0L), 1);
             LOG.info("[boltTask] threadName={}, averageWaitingTime={}ms, averageCostTime={}ms",
                     threadName,
                     String.format("%.4f", (double) waitingTimeNs / (double) (1000 * 1000 * count)),

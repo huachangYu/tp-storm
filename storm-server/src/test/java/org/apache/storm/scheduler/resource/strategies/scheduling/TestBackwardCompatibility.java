@@ -42,7 +42,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * with the prior version of {@link DefaultResourceAwareStrategy}.
  * </p>
  *
- * The tests in this class wrap tests in other classes while replacing Strategy classes.
+ * The tests in this class wrap tests in other classes while replacing StrategyType classes.
  * The wrapped classes have protected methods that return strategy classes. These methods
  * are overridden to return backward compatible class.
  */

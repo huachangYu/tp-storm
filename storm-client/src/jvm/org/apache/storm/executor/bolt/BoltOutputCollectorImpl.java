@@ -111,7 +111,7 @@ public class BoltOutputCollectorImpl implements IOutputCollector {
             }
             long tupleRootId = CollectionUtils.isEmpty(anchors) ? TupleImpl.generateCurrentRootId() :
                     anchors.stream().mapToLong(Tuple::getRootId).max().getAsLong();
-            TupleImpl tupleExt = new TupleImpl( executor.getWorkerTopologyContext(), values,
+            TupleImpl tupleExt = new TupleImpl(executor.getWorkerTopologyContext(), values,
                     executor.getComponentId(), taskId, streamId, msgId, tupleRootId);
             xsfer.tryTransfer(new AddressedTuple(t, tupleExt), executor.getPendingEmits());
         }

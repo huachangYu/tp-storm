@@ -1242,7 +1242,7 @@ public class TestResourceAwareScheduler {
             double ratio = medianLastBlockTime / medianFirstBlockTime;
 
             double slowSchedulingThreshold = 1.5;
-            String msg = "Strategy " + strategyResult.getKey() + " scheduling is significantly slower for mostly full fragmented cluster\n";
+            String msg = "StrategyType " + strategyResult.getKey() + " scheduling is significantly slower for mostly full fragmented cluster\n";
             double ratioAccepted = strategyToAcceptedBlockTimeRatios.get(strategyResult.getKey());
             msg += String.format("Ratio was %.2f (high/low=%.2f/%.2f), max allowed is %.2f (%.2f * %.2f)",
                     ratio, medianLastBlockTime, medianFirstBlockTime,

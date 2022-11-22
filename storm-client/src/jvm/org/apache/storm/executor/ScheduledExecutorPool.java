@@ -14,10 +14,12 @@ import java.util.stream.Collectors;
 
 import org.apache.storm.Config;
 import org.apache.storm.daemon.LoadType;
-import org.apache.storm.daemon.OverLoadChecker;
 import org.apache.storm.daemon.WorkerOptimizer;
 import org.apache.storm.daemon.worker.SystemMonitor;
 import org.apache.storm.executor.bolt.BoltExecutor;
+import org.apache.storm.executor.strategy.ScheduleStrategy;
+import org.apache.storm.executor.strategy.ScheduleStrategyUtils;
+import org.apache.storm.executor.strategy.StrategyType;
 import org.apache.storm.shade.org.apache.commons.lang.StringUtils;
 import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.ResizableBlockingQueue;
@@ -27,7 +29,9 @@ import org.slf4j.LoggerFactory;
 public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private static final Logger LOG = LoggerFactory.getLogger(ScheduledExecutorPool.class);
     private static final Random RAND = new Random();
-    private static long totalTimeNsPerBatch = 1000 * 1000; // 1ms
+    private static final long TOTAL_TIME_NS_PER_TASK_BATCH = 1000 * 1000; // 1ms
+    private static final double HIGH_QUEUE_LOAD_THRESHOLD = 0.7;
+    private static final double LOW_QUEUE_LOAD_THRESHOLD = 0.1;
 
     private class BoltConsumer extends Thread {
         private volatile boolean running;
@@ -84,8 +88,10 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private final int minQueueCapacity;
     private final boolean optimizePool;
     private final boolean optimizeWorker;
-    private final IScheduleStrategy strategy;
-    private Thread metricsThread;
+    private final ScheduleStrategy strategy;
+    private Thread monitorThread;
+    private final boolean shouldPrintMetrics;
+    private final boolean updateStrategyStatus;
 
     public ScheduledExecutorPool(SystemMonitor systemMonitor, String topologyId, Map<String, Object> topologyConf) {
         this(systemMonitor, topologyId, topologyConf, SystemMonitor.CPU_CORE_NUM,
@@ -112,8 +118,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                     0.9, 0.1, 0.5, 0.5);
         }
         String strategyName = (String) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_STRATEGY,
-                ScheduledStrategy.Strategy.Fair.name());
-        this.strategy = ScheduledStrategy.getStrategy(strategyName);
+                StrategyType.AD.name());
+        this.strategy = ScheduleStrategyUtils.getStrategy(strategyName);
         while (consumers.size() < coreConsumers) {
             addConsumer();
         }
@@ -124,20 +130,10 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             startWorkerOptimizer();
         }
 
-        boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
-        if (printMetrics) {
-            this.metricsThread = new Thread(() -> {
-                while (true) {
-                    printMetrics();
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            });
-            this.metricsThread.setDaemon(true);
-            this.metricsThread.start();
+        this.updateStrategyStatus = strategyName.equals(StrategyType.AD.name());
+        this.shouldPrintMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
+        if (shouldPrintMetrics || updateStrategyStatus) {
+            startMonitorThread();
         }
     }
 
@@ -181,7 +177,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             ResizableBlockingQueue<BoltTask> queue = taskQueue.getQueue();
             List<BoltTask> tasks = new ArrayList<>();
             double avgTimeNs = executor.getMonitor().getAvgTimeNs();
-            int batchSize = avgTimeNs <= 10 ? 1 : (int) Math.max(1, Math.ceil(totalTimeNsPerBatch / avgTimeNs));
+            int batchSize = avgTimeNs <= 10 ? 1 : (int) Math.max(1, Math.ceil(TOTAL_TIME_NS_PER_TASK_BATCH / avgTimeNs));
             while (!queue.isEmpty() && tasks.size() < batchSize) {
                 tasks.add(queue.remove());
             }
@@ -199,7 +195,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 return;
             }
             bolts.add(thread);
-            taskQueues.put(threadName, new TaskQueue(minQueueCapacity, thread.getMonitor()));
+            taskQueues.put(threadName, new TaskQueue(minQueueCapacity, thread.getReceiveQueue(), thread.getMonitor()));
             if (taskQueues.size() == 1) {
                 emptyThreadWait.signalAll();
             }
@@ -243,15 +239,6 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         }
         if (blockedConsumerNum.get() > 0) {
             signalQueueNotEmpty();
-        }
-    }
-
-    private void signalQueueNotEmpty() {
-        lock.lock();
-        try {
-            emptyQueueWait.signal();
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -306,22 +293,16 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         if (consumers.size() >= maxConsumers || taskQueues.size() == 0) {
             return;
         }
-        int queueNum = taskQueues.size();
-        int[] capacities = taskQueues.values().stream().mapToInt(t -> t.getQueue().getCapacity()).toArray();
-        int[] sizes = taskQueues.values().stream().mapToInt(t -> t.getQueue().size()).toArray();
-        double[] workloads = new double[queueNum];
-        for (int  i = 0; i < queueNum; i++) {
-            workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
-        }
-        int sumCapacity = Arrays.stream(capacities).sum();
-        boolean isOverLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.9);
-        boolean isLowLoad = Arrays.stream(workloads).allMatch(t -> t < 0.1);
+        double[] queueLoads = taskQueues.values().stream().mapToDouble(t -> t.getQueue().getLoad()).toArray();
+        boolean isOverLoad = Arrays.stream(queueLoads).anyMatch(t -> t > HIGH_QUEUE_LOAD_THRESHOLD);
+        boolean isLowLoad = Arrays.stream(queueLoads).allMatch(t -> t < LOW_QUEUE_LOAD_THRESHOLD);
+        int sumCapacity = taskQueues.values().stream().mapToInt(t -> t.getQueue().getCapacity()).sum();
         boolean hasRemainCapacity = taskQueueOptimizer.getRemainCapacity() > 0.5 * sumCapacity;
         if ((!isOverLoad && !isLowLoad) || hasRemainCapacity) {
             return;
         }
         double cpuUsage = systemMonitor.getCpuUsage();
-        if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.8) {
+        if (isOverLoad && cpuUsage > 0 && cpuUsage < 0.9) {
             addConsumer();
             LOG.info("optimize consumer. Added a new consumer");
         } else if (isLowLoad && consumers.size() > coreConsumers) {
@@ -337,46 +318,74 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
             return;
         }
         String topologyName = StringUtils.join(Arrays.copyOfRange(parts, 0, parts.length - 2), "-");
-        this.workerOptimizer = new WorkerOptimizer(topologyName, topologyConf, maxWorkers, new OverLoadChecker() {
-            @Override
-            public LoadType getLoadType() {
-                lock.lock();
-                try {
-                    int[] capacities = taskQueues.values().stream().mapToInt(t -> t.getQueue().getCapacity()).toArray();
-                    int[] sizes = taskQueues.values().stream().mapToInt(t -> t.getQueue().size()).toArray();
-                    double[] workloads = new double[taskQueues.size()];
-                    for (int  i = 0; i < taskQueues.size(); i++) {
-                        workloads[i] = (double) capacities[i] / (double) Math.max(sizes[i], 1);
-                    }
-                    boolean isQueueHighLoad = Arrays.stream(workloads).anyMatch(t -> t > 0.9);
-                    boolean isQueueLowLoad = Arrays.stream(workloads).allMatch(t -> t < 0.1);
-                    double cpuUsage = systemMonitor.getCpuUsage();
-                    if (isQueueHighLoad && cpuUsage > 0.7) {
-                        return LoadType.High;
-                    } else if (isQueueLowLoad && cpuUsage < 0.1) {
-                        return LoadType.Low;
-                    } else {
-                        return LoadType.Mid;
-                    }
-                } finally {
-                    lock.unlock();
+        this.workerOptimizer = new WorkerOptimizer(topologyName, topologyConf, maxWorkers, () -> {
+            lock.lock();
+            try {
+                double[] queueLoads = taskQueues.values().stream().mapToDouble(t -> t.getQueue().getLoad()).toArray();
+                boolean isQueueHighLoad = Arrays.stream(queueLoads).anyMatch(t -> t > HIGH_QUEUE_LOAD_THRESHOLD);
+                boolean isQueueLowLoad = Arrays.stream(queueLoads).allMatch(t -> t < LOW_QUEUE_LOAD_THRESHOLD);
+                double cpuUsage = systemMonitor.getCpuUsage();
+                if (isQueueHighLoad && cpuUsage > 0.7) {
+                    return LoadType.High;
+                } else if (isQueueLowLoad && cpuUsage < 0.1) {
+                    return LoadType.Low;
+                } else {
+                    return LoadType.Mid;
                 }
+            } finally {
+                lock.unlock();
             }
         });
         this.workerOptimizer.start();
     }
 
     private void printMetrics() {
+        // print queue info
+        LOG.info("queue info: {}.", Arrays.toString(taskQueues.entrySet().stream()
+                .map(t -> {
+                    ResizableBlockingQueue<BoltTask> queue = t.getValue().getQueue();
+                    return String.format("\"%s\":(%d/%d)",
+                            t.getKey(), queue.size(), queue.getCapacity());
+                }).toArray()));
+    }
+
+    private void startMonitorThread() {
+        this.monitorThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                lock.lock();
+                try {
+                    if (shouldPrintMetrics) {
+                        printMetrics();
+                    }
+                    if (updateStrategyStatus) {
+                        boolean isQueueHighLoad = taskQueues.values().stream().anyMatch(
+                            t -> t.getQueue().getLoad() > HIGH_QUEUE_LOAD_THRESHOLD);
+                        if (strategy.getStatus() == 0 && isQueueHighLoad) {
+                            LOG.info("update status of strategy from 0 to 1");
+                            strategy.setStatus(1);
+                        } else if (strategy.getStatus() == 1 && !isQueueHighLoad) {
+                            LOG.info("update status of strategy from 1 to 0");
+                            strategy.setStatus(0);
+                        }
+                    }
+                } finally {
+                    lock.unlock();
+                }
+            }
+        });
+        this.monitorThread.setDaemon(true);
+        this.monitorThread.start();
+    }
+
+    private void signalQueueNotEmpty() {
         lock.lock();
         try {
-            // print queue info
-            List<String> queueInfos = taskQueues.entrySet().stream()
-                    .map(t -> {
-                        ResizableBlockingQueue<BoltTask> queue = t.getValue().getQueue();
-                        return String.format("\"%s\":(%d/%d)",
-                                t.getKey(), queue.size(), queue.getCapacity());
-                    }).collect(Collectors.toList());
-            LOG.info("queue info: {}.", Arrays.toString(queueInfos.toArray()));
+            emptyQueueWait.signal();
         } finally {
             lock.unlock();
         }

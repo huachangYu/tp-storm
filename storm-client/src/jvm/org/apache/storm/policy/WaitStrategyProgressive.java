@@ -24,7 +24,7 @@ import org.apache.storm.Config;
 import org.apache.storm.utils.ObjectReader;
 
 /**
- * A Progressive Wait Strategy.
+ * A Progressive Wait StrategyType.
  *
  * <p>Has three levels of idling. Stays in each level for a configured number of iterations before entering the next level.
  * Level 1 - No idling. Returns immediately. Stays in this level for `level1Count` iterations. Level 2 - Calls LockSupport.parkNanos(1).

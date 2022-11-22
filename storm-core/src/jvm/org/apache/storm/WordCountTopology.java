@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
-import org.apache.storm.executor.ScheduledStrategy;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -109,15 +108,15 @@ public class WordCountTopology {
 
         Config conf = new Config();
         //conf.setNumWorkers(2);
-        conf.useBoltExecutorPool(true);
-        conf.setBoltExecutorPoolCoreConsumers(2);
-        conf.setBoltExecutorPoolMaxConsumers(4);
-        conf.setBoltExecutorPoolStrategy(ScheduledStrategy.Strategy.OnlyQueue.name());
-        conf.setBoltExecutorPoolTotalQueueCapacity(2000000);
+        conf.useExecutorPool(true);
+        conf.setExecutorPoolCoreConsumers(2);
+        conf.setExecutorPoolMaxConsumers(4);
+        conf.setExecutorPoolStrategy("AD");
+        conf.setExecutorPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
-        conf.enableBoltExecutorPoolOptimize(true);
-        conf.setBoltExecutorPoolIds(Arrays.asList("split", "count"));
-        conf.enableBoltExecutorPoolPrintMetrics(true);
+        conf.enableExecutorPoolOptimize(true);
+        conf.setExecutorPoolIds(Arrays.asList("split", "count"));
+        conf.enableExecutorPoolPrintMetrics(true);
 
         LocalCluster cluster = new LocalCluster();
         cluster.submitTopology("word-count", conf, builder.createTopology());

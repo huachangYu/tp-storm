@@ -27,7 +27,7 @@ import org.apache.storm.daemon.worker.WorkerState;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.executor.IScheduledExecutorPool;
-import org.apache.storm.executor.ScheduledStrategy;
+import org.apache.storm.executor.strategy.StrategyType;
 import org.apache.storm.hooks.info.BoltExecuteInfo;
 import org.apache.storm.metric.api.IMetricsRegistrant;
 import org.apache.storm.policy.IWaitStrategy;
@@ -239,7 +239,7 @@ public class BoltExecutor extends Executor {
         if (this.useThreadPool) {
             this.boltExecutorPool = boltExecutorPool;
             this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_STRATEGY,
-                    ScheduledStrategy.Strategy.Fair.name());
+                    StrategyType.Fair.name());
         }
     }
 

@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.storm.executor.ScheduledStrategy;
+import org.apache.storm.executor.strategy.StrategyType;
 import org.apache.storm.metric.IEventLogger;
 import org.apache.storm.policy.IWaitStrategy;
 import org.apache.storm.serialization.IKryoDecorator;
@@ -946,7 +946,7 @@ public class Config extends HashMap<String, Object> {
     @IsPositiveNumber(includeZero = true)
     public static final String TOPOLOGY_SPOUT_WAIT_PROGRESSIVE_LEVEL3_SLEEP_MILLIS = "topology.spout.wait.progressive.level3.sleep.millis";
     /**
-     * Selects the Bolt's Wait Strategy to use when there are no incoming msgs. Used to trade off latency vs CPU usage. This class must
+     * Selects the Bolt's Wait StrategyType to use when there are no incoming msgs. Used to trade off latency vs CPU usage. This class must
      * implement {@link IWaitStrategy}.
      */
     @IsString
@@ -1896,42 +1896,42 @@ public class Config extends HashMap<String, Object> {
         conf.put(Config.TOPOLOGY_WORKERS, workers);
     }
 
-    public static void setBoltExecutorPoolCoreConsumers(Map<String, Object> conf, int coreNum) {
+    public static void setExecutorPoolCoreConsumers(Map<String, Object> conf, int coreNum) {
         conf.put(Config.BOLT_EXECUTOR_POOL_CORE_CONSUMERS, coreNum);
     }
 
-    public static void setTopologyUseBoltExecutorPool(Map<String, Object> conf, boolean isOn) {
+    public static void setTopologyUseExecutorPool(Map<String, Object> conf, boolean isOn) {
         conf.put(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, isOn);
     }
 
-    public static void setBoltExecutorPoolStrategy(Map<String, Object> conf, String strategy) {
+    public static void setExecutorPoolStrategy(Map<String, Object> conf, String strategy) {
         conf.put(Config.BOLT_EXECUTOR_POOL_STRATEGY, strategy);
     }
 
-    public void setBoltExecutorPoolStrategy(String strategy) {
-        for (ScheduledStrategy.Strategy systemStrategy : ScheduledStrategy.Strategy.values()) {
+    public void setExecutorPoolStrategy(String strategy) {
+        for (StrategyType systemStrategy : StrategyType.values()) {
             if (systemStrategy.name().equals(strategy)) {
-                setBoltExecutorPoolStrategy(this, strategy);
+                setExecutorPoolStrategy(this, strategy);
                 return;
             }
         }
         throw new RuntimeException("invalid strategy.");
     }
 
-    public static void setBoltExecutorPoolIds(Map<String, Object> conf, List<String> boltIds) {
+    public static void setExecutorPoolIds(Map<String, Object> conf, List<String> boltIds) {
         conf.put(Config.BOLT_EXECUTOR_POOL_IDS, boltIds);
     }
 
-    public void setBoltExecutorPoolIds(List<String> boltIds) {
-        setBoltExecutorPoolIds(this, boltIds);
+    public void setExecutorPoolIds(List<String> boltIds) {
+        setExecutorPoolIds(this, boltIds);
     }
 
-    public static void setBoltExecutorPoolOptimize(Map<String, Object> conf, boolean on) {
+    public static void setExecutorPoolOptimize(Map<String, Object> conf, boolean on) {
         conf.put(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, on);
     }
 
-    public void enableBoltExecutorPoolOptimize(boolean on) {
-        setBoltExecutorPoolOptimize(this, on);
+    public void enableExecutorPoolOptimize(boolean on) {
+        setExecutorPoolOptimize(this, on);
     }
 
     public static void setTopologyEnableWorkersOptimize(Map<String, Object> conf, boolean on) {
@@ -1942,55 +1942,55 @@ public class Config extends HashMap<String, Object> {
         setTopologyEnableWorkersOptimize(this, on);
     }
 
-    public static void setBoltExecutorPoolMaxConsumers(Map<String, Object> conf, int maxConsumers) {
+    public static void setExecutorPoolMaxConsumers(Map<String, Object> conf, int maxConsumers) {
         conf.put(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, maxConsumers);
     }
 
-    public void setBoltExecutorPoolMaxConsumers(int maxConsumers) {
-        setBoltExecutorPoolMaxConsumers(this, maxConsumers);
+    public void setExecutorPoolMaxConsumers(int maxConsumers) {
+        setExecutorPoolMaxConsumers(this, maxConsumers);
     }
 
-    public static void setBoltExecutorPoolMinQueueCapacity(Map<String, Object> conf, int minCapacity) {
+    public static void setExecutorPoolMinQueueCapacity(Map<String, Object> conf, int minCapacity) {
         conf.put(Config.BOLT_EXECUTOR_POOL_MIN_QUEUE_CAPACITY, minCapacity);
     }
 
-    public void setBoltExecutorPoolMinQueueCapacity(int minCapacity) {
+    public void setExecutorPoolMinQueueCapacity(int minCapacity) {
         if (minCapacity <= 0) {
             throw new IllegalArgumentException("minCapacity must be bigger than 0");
         }
-        setBoltExecutorPoolMinQueueCapacity(this, minCapacity);
+        setExecutorPoolMinQueueCapacity(this, minCapacity);
     }
 
-    public static void setBoltExecutorPoolMaxQueueCapacity(Map<String, Object> conf, int maxCapacity) {
+    public static void setExecutorPoolMaxQueueCapacity(Map<String, Object> conf, int maxCapacity) {
         conf.put(Config.BOLT_EXECUTOR_POOL_MAX_QUEUE_CAPACITY, maxCapacity);
     }
 
-    public void setBoltExecutorPoolMaxQueueCapacity(int maxCapacity) {
-        setBoltExecutorPoolMaxQueueCapacity(this, maxCapacity);
+    public void setExecutorPoolMaxQueueCapacity(int maxCapacity) {
+        setExecutorPoolMaxQueueCapacity(this, maxCapacity);
     }
 
-    public static void setBoltExecutorPoolTotalQueueCapacity(Map<String, Object> conf, int totalCapacity) {
+    public static void setExecutorPoolTotalQueueCapacity(Map<String, Object> conf, int totalCapacity) {
         conf.put(Config.BOLT_EXECUTOR_POOL_TOTAL_QUEUE_CAPACITY, totalCapacity);
     }
 
-    public void setBoltExecutorPoolTotalQueueCapacity(int totalCapacity) {
-        setBoltExecutorPoolTotalQueueCapacity(this, totalCapacity);
+    public void setExecutorPoolTotalQueueCapacity(int totalCapacity) {
+        setExecutorPoolTotalQueueCapacity(this, totalCapacity);
     }
     
-    public static void setBoltExecutorPoolPrintMetrics(Map<String, Object> conf, boolean printMetrics) {
+    public static void setExecutorPoolPrintMetrics(Map<String, Object> conf, boolean printMetrics) {
         conf.put(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, printMetrics);
     }
     
-    public void enableBoltExecutorPoolPrintMetrics(boolean printMetrics) {
-        setBoltExecutorPoolPrintMetrics(this, printMetrics);
+    public void enableExecutorPoolPrintMetrics(boolean printMetrics) {
+        setExecutorPoolPrintMetrics(this, printMetrics);
     }
 
-    public static void setBoltExecutorPoolMaxWorkerNum(Map<String, Object> conf, int maxWorkerNum) {
+    public static void setExecutorPoolMaxWorkerNum(Map<String, Object> conf, int maxWorkerNum) {
         conf.put(Config.TOPOLOGY_MAX_WORKER_NUM, maxWorkerNum);
     }
 
-    public void setBoltExecutorPoolMaxWorkerNum(int maxWorkerNum) {
-        setBoltExecutorPoolMaxWorkerNum(this, maxWorkerNum);
+    public void setExecutorPoolMaxWorkerNum(int maxWorkerNum) {
+        setExecutorPoolMaxWorkerNum(this, maxWorkerNum);
     }
 
     public static void setNumAckers(Map<String, Object> conf, int numExecutors) {
@@ -2130,12 +2130,12 @@ public class Config extends HashMap<String, Object> {
         setNumWorkers(this, workers);
     }
 
-    public void setBoltExecutorPoolCoreConsumers(int coreNum) {
-        setBoltExecutorPoolCoreConsumers(this, coreNum);
+    public void setExecutorPoolCoreConsumers(int coreNum) {
+        setExecutorPoolCoreConsumers(this, coreNum);
     }
 
-    public void useBoltExecutorPool(boolean isOn) {
-        setTopologyUseBoltExecutorPool(this, isOn);
+    public void useExecutorPool(boolean isOn) {
+        setTopologyUseExecutorPool(this, isOn);
     }
 
     @SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")

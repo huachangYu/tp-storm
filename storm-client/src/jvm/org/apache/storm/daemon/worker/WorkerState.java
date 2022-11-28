@@ -253,12 +253,7 @@ public class WorkerState {
         boolean useThreadPool = (Boolean) topologyConf.getOrDefault(Config.TOPOLOGY_USE_BOLT_THREAD_POOL, false);
         this.systemMonitor = new SystemMonitor();
         if (useThreadPool) {
-            long coreConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_CORE_CONSUMERS,
-                    (long) Runtime.getRuntime().availableProcessors());
-            long maxConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, coreConsumers);
-            long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_MAX_WORKER_NUM, 1L);
-            this.boltExecutorPool = new ScheduledExecutorPool(systemMonitor, topologyId, topologyConf,
-                    (int) coreConsumers, (int) maxConsumers, (int) maxWorkers);
+            this.boltExecutorPool = new ScheduledExecutorPool(systemMonitor, topologyId, topologyConf);
             boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
             BoltTask.setEnablePrintMetrics(printMetrics);
         }

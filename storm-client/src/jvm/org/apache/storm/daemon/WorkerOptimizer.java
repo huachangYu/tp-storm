@@ -96,5 +96,6 @@ public class WorkerOptimizer implements Shutdownable {
     @Override
     public void shutdown() {
         executor.shutdown();
+        LOG.info("worker optimizer shutdown!");
     }
 }

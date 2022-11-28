@@ -2131,6 +2131,9 @@ public class Config extends HashMap<String, Object> {
     }
 
     public void setExecutorPoolCoreConsumers(int coreNum) {
+        if (coreNum <= 0) {
+            throw new IllegalArgumentException("coreNum must be a positive number.");
+        }
         setExecutorPoolCoreConsumers(this, coreNum);
     }
 

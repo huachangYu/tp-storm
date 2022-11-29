@@ -24,6 +24,7 @@ import org.apache.storm.ICredentialsListener;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.daemon.metrics.BuiltinMetricsUtil;
 import org.apache.storm.daemon.worker.WorkerState;
+import org.apache.storm.executor.BoltTask;
 import org.apache.storm.executor.Executor;
 import org.apache.storm.executor.ExecutorShutdown;
 import org.apache.storm.executor.IScheduledExecutorPool;
@@ -78,7 +79,9 @@ public class BoltExecutor extends Executor {
         this.stats = new BoltExecutorStats(ConfigUtils.samplingRate(this.getTopoConf()),
                                            ObjectReader.getInt(this.getTopoConf().get(Config.NUM_STAT_BUCKETS)));
         this.useThreadPool = false;
-        this.monitor = new BoltExecutorMonitor(getName());
+        boolean executorPoolOptimize = (Boolean) topoConf.getOrDefault(Config.TOPOLOGY_BOLT_THREAD_POOL_OPTIMIZE, false);
+        boolean printMetrics = (Boolean) topoConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
+        this.monitor = new BoltExecutorMonitor(getName(), executorPoolOptimize, printMetrics);
     }
 
     private static IWaitStrategy makeSystemBoltWaitStrategy() {

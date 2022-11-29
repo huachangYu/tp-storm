@@ -254,8 +254,6 @@ public class WorkerState {
         this.systemMonitor = new SystemMonitor();
         if (useThreadPool) {
             this.boltExecutorPool = new ScheduledExecutorPool(systemMonitor, topologyId, topologyConf);
-            boolean printMetrics = (Boolean) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_PRINT_METRICS, false);
-            BoltTask.setEnablePrintMetrics(printMetrics);
         }
     }
 

@@ -109,7 +109,7 @@ public class WordCountTopology {
         Config conf = new Config();
         //conf.setNumWorkers(2);
         conf.useExecutorPool(true);
-        conf.setExecutorPoolCoreConsumers(2);
+        conf.setExecutorPoolCoreConsumers(1);
         conf.setExecutorPoolMaxConsumers(4);
         conf.setExecutorPoolStrategy("AD");
         conf.setExecutorPoolTotalQueueCapacity(2000000);

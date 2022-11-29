@@ -294,7 +294,7 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
 
     // thread-unsafe
     private void optimizeConsumer() {
-        if (consumers.size() >= maxConsumers || taskQueues.size() == 0) {
+        if (taskQueues.size() == 0) {
             return;
         }
         double[] queueLoads = taskQueues.values().stream().mapToDouble(t -> t.getQueue().getLoad()).toArray();
@@ -303,15 +303,31 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         if ((!isOverLoad && !isLowLoad)) {
             return;
         }
-        double cpuUsage = systemMonitor.getAverageCpuUsage(10);
-        if (isOverLoad && cpuUsage > 0 && cpuUsage < HIGH_CPU_USAGE_THRESHOLD) {
+        long flowSurgeCount = taskQueues.values().stream().filter(t -> t.getMonitor().isFlowSurge()).count();
+        if (consumers.size() < maxConsumers && 2 * flowSurgeCount > taskQueues.size()) {
             addConsumer();
-            LOG.info("optimize consumer. Added a new consumer");
-        } else if (isLowLoad && consumers.size() > coreConsumers
-                && cpuUsage * consumers.size() / (consumers.size() - 1)
+            LOG.info("optimize consumer. added a new consumer because the flow surged. "
+                    + "consumerNum:{}", consumers.size());
+            for (TaskQueue taskQueue : taskQueues.values()) {
+                taskQueue.getMonitor().clearPeriodWindow();
+            }
+            return;
+        }
+        double cpuUsage = systemMonitor.getAverageCpuUsage(10);
+        if (consumers.size() < maxConsumers && isOverLoad
+                && cpuUsage > 0 && cpuUsage < HIGH_CPU_USAGE_THRESHOLD) {
+            addConsumer();
+            LOG.info("optimize consumer. added a new consumer because executor pool is overload. "
+                    + "cpu usage:{}, consumerNum:{}", String.format("%.4f", cpuUsage), consumers.size());
+            for (TaskQueue taskQueue : taskQueues.values()) {
+                taskQueue.getMonitor().clearPeriodWindow();
+            }
+        } else if (consumers.size() > coreConsumers && isLowLoad
+                && cpuUsage / (consumers.size() - 1)
                     < (1 - OTHER_THREADS_TOTAL_CPU_USAGE) / SystemMonitor.CPU_CORE_NUM) {
             removeConsumer();
-            LOG.info("optimize consumer. Removed a consumer");
+            LOG.info("optimize consumer. removed a consumer because executor pool is in low load. "
+                    + "cpu usage:{}, consumerNum: {}", String.format("%.4f", cpuUsage), consumers.size());
         }
     }
 

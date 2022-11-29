@@ -14,11 +14,6 @@ public class BoltTask {
     private static final Logger LOG = LoggerFactory.getLogger(BoltTask.class);
     //metrics
     private static Lock lock = new ReentrantLock();
-    private static boolean enablePrintMetrics = false;
-    private static Map<String, Long> totalWaiting = new HashMap<>();
-    private static Map<String, Long> totalCost = new HashMap<>();
-    private static Map<String, Long> lastPrintTimeNs = new HashMap<>();
-    private static Map<String, Long> totalCount = new HashMap<>();
 
     private final Runnable task;
     private final Tuple tuple;
@@ -41,10 +36,6 @@ public class BoltTask {
         this.tuple = tuple;
     }
 
-    public static void setEnablePrintMetrics(boolean enablePrintMetrics) {
-        BoltTask.enablePrintMetrics = enablePrintMetrics;
-    }
-
     private boolean shouldRecord() {
         return recordCost;
     }
@@ -64,8 +55,8 @@ public class BoltTask {
         task.run();
         if (shouldRecord()) {
             this.endTimeNs = System.nanoTime();
-            if (enablePrintMetrics) {
-                updateMetrics();
+            if (this.endTimeNs > 0) {
+                monitor.recordBoltTaskInfo(getWaitingNs(), getCostNs());
             }
         }
     }
@@ -80,35 +71,5 @@ public class BoltTask {
 
     public long getWaitingNs() {
         return startTimeNs - createTimeNs;
-    }
-
-    public void updateMetrics() {
-        if (endTimeNs == 0 || !shouldRecord()) {
-            return;
-        }
-        lock.lock();
-        if (!lastPrintTimeNs.containsKey(threadName)) {
-            lastPrintTimeNs.put(threadName, endTimeNs);
-        }
-        Long lastTimeNs = lastPrintTimeNs.get(threadName);
-        if (endTimeNs - lastTimeNs >= 1000 * 1000 * 1000) {
-            // print metrics per second
-            long waitingTimeNs = totalWaiting.getOrDefault(threadName, 0L);
-            long costTimeNs = totalCost.getOrDefault(threadName, 0L);
-            long count = Math.max(totalCount.getOrDefault(threadName, 0L), 1);
-            LOG.info("[boltTask] threadName={}, averageWaitingTime={}ms, averageCostTime={}ms",
-                    threadName,
-                    String.format("%.4f", (double) waitingTimeNs / (double) (1000 * 1000 * count)),
-                    String.format("%.4f", (double) costTimeNs / (double) (1000 * 1000 * count)));
-            lastPrintTimeNs.put(threadName, endTimeNs);
-            totalCost.put(threadName, 0L);
-            totalWaiting.put(threadName, 0L);
-            totalCount.put(threadName, 0L);
-        } else {
-            totalCost.put(threadName, totalCost.getOrDefault(threadName, 0L) + getCostNs());
-            totalWaiting.put(threadName, totalWaiting.getOrDefault(threadName, 0L) + getWaitingNs());
-            totalCount.put(threadName, totalCount.getOrDefault(threadName, 0L) + 1);
-        }
-        lock.unlock();
     }
 }

@@ -31,4 +31,8 @@ public class TaskQueue {
     public int getTotalSize() {
         return queue.size() + receiveQueue.size();
     }
+
+    public long getWaitingTime(long ns) {
+        return monitor.getWaitingTime(ns);
+    }
 }

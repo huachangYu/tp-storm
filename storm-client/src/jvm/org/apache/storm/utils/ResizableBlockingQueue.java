@@ -4,9 +4,6 @@ import java.util.Collection;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Copy from <a href="https://github.com/OpenRock/OpenAM">openAm</a>.
- * */
 public class ResizableBlockingQueue<E> extends LinkedBlockingQueue<E> {
     private int capacity;
     private final ResizableSemaphore availablePlaces;

@@ -37,8 +37,8 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
     private static final double LOW_QUEUE_LOAD_THRESHOLD_FOR_CONSUMER = 0.1;
     private static final double HIGH_CPU_USAGE_THRESHOLD = 0.85;
     private static final double OTHER_THREADS_TOTAL_CPU_USAGE = 0.2;
-    private static final double WORKER_HIGH_CPU_USAGE_THRESHOLD = 0.7;
-    private static final double WORKER_LOW_CPU_USAGE_THRESHOLD = 0.1;
+    private static final double WORKER_HIGH_CPU_USAGE_THRESHOLD = 0.85;
+    private static final double WORKER_LOW_CPU_USAGE_THRESHOLD = 0.15;
 
     private class BoltConsumer extends Thread {
         private volatile boolean running;
@@ -105,10 +105,13 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
         this.topologyConf = topologyConf;
 
         final long coreConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_CORE_CONSUMERS,
-                (long) Runtime.getRuntime().availableProcessors());
+                (long) SystemMonitor.CPU_CORE_NUM);
         final long maxConsumers = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MAX_CONSUMERS, coreConsumers);
         final long maxWorkers = (Long) topologyConf.getOrDefault(Config.TOPOLOGY_MAX_WORKER_NUM, 1L);
         final long minQueueCapacity = (Long) topologyConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_MIN_QUEUE_CAPACITY, 1000L);
+        if (maxConsumers < coreConsumers) {
+            throw new IllegalArgumentException("maxConsumers should be not less than coreConsumers");
+        }
         this.coreConsumers = (int) coreConsumers;
         this.maxConsumers = (int) maxConsumers;
         this.maxWorkers = (int) maxWorkers;
@@ -345,9 +348,11 @@ public class ScheduledExecutorPool implements IScheduledExecutorPool {
                 boolean isQueueHighLoad = Arrays.stream(queueLoads).anyMatch(t -> t > HIGH_QUEUE_LOAD_THRESHOLD_FOR_CONSUMER);
                 boolean isQueueLowLoad = Arrays.stream(queueLoads).allMatch(t -> t < LOW_QUEUE_LOAD_THRESHOLD_FOR_CONSUMER);
                 double cpuUsage = systemMonitor.getAverageCpuUsage(10);
-                if (isQueueHighLoad && cpuUsage > WORKER_HIGH_CPU_USAGE_THRESHOLD) {
+                if (isQueueHighLoad
+                        && cpuUsage / consumers.size() > WORKER_HIGH_CPU_USAGE_THRESHOLD / SystemMonitor.CPU_CORE_NUM) {
                     return LoadType.High;
-                } else if (isQueueLowLoad && cpuUsage < WORKER_LOW_CPU_USAGE_THRESHOLD) {
+                } else if (isQueueLowLoad
+                        && cpuUsage / consumers.size() < WORKER_LOW_CPU_USAGE_THRESHOLD / SystemMonitor.CPU_CORE_NUM) {
                     return LoadType.Low;
                 } else {
                     return LoadType.Mid;

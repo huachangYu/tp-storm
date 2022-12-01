@@ -2,9 +2,6 @@ package org.apache.storm.utils;
 
 import java.util.concurrent.Semaphore;
 
-/**
- * Copy from <a href="https://github.com/OpenRock/OpenAM">openAm</a>.
- * */
 public class ResizableSemaphore extends Semaphore {
     public ResizableSemaphore(int permits, boolean fair) {
         super(permits, fair);

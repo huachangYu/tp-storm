@@ -1,7 +1,5 @@
 package org.apache.storm.executor;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -13,21 +11,21 @@ import org.slf4j.LoggerFactory;
 public class BoltTask {
     private static final Logger LOG = LoggerFactory.getLogger(BoltTask.class);
     //metrics
-    private static Lock lock = new ReentrantLock();
+    private static final Lock lock = new ReentrantLock();
 
     private final Runnable task;
     private final Tuple tuple;
     private final BoltExecutorMonitor monitor;
     private final boolean recordCost;
-    private final String threadName;
+    private final String executorName;
     private long createTimeNs;
     private long startTimeNs;
     private long endTimeNs;
 
-    public BoltTask(Runnable task, Tuple tuple, BoltExecutorMonitor monitor, String threadName,
+    public BoltTask(Runnable task, Tuple tuple, BoltExecutorMonitor monitor, String executorName,
                     boolean recordCost) {
         this.monitor = monitor;
-        this.threadName = threadName;
+        this.executorName = executorName;
         this.recordCost = recordCost;
         if (shouldRecord()) {
             this.createTimeNs = System.nanoTime();

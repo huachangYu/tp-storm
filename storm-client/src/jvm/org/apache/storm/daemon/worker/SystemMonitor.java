@@ -1,21 +1,24 @@
 package org.apache.storm.daemon.worker;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.storm.daemon.Shutdownable;
 import oshi.SystemInfo;
 import oshi.hardware.CentralProcessor;
-import oshi.software.os.OperatingSystem;
-import oshi.software.os.linux.LinuxOperatingSystem;
 
 public class SystemMonitor implements Shutdownable {
-    public static final int CPU_CORE_NUM = Runtime.getRuntime().availableProcessors();
+    public static final int CPU_CORE_NUM;
     private static final long CPU_USAGE_TIME_SPAN_MS = 1000; // 1s
     private static final int CPU_USAGE_LIST_SIZE = 60;
+
+    static {
+        SystemInfo systemInfo = new SystemInfo();
+        CentralProcessor processor = systemInfo.getHardware().getProcessor();
+        CPU_CORE_NUM = processor.getLogicalProcessorCount();
+    }
+
     private final ReentrantLock lock = new ReentrantLock();
     private final CentralProcessor systemInfoProcessor;
     private final Thread cpuUpdater;

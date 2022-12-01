@@ -18,8 +18,8 @@ public class WorkerOptimizer implements Shutdownable {
     private final String topologyName;
     private final Map<String, Object> topologyConf;
     private final int maxWorkers;
-    private final long timeInterval = 10;
-    private final long optimizeTimeInterval = 120 * 1000;
+    private final long timeInterval = 500;
+    private final long optimizeTimeInterval = 5 * 60 * 1000; // 5 minutes
     private final double highLoadThreshold = 0.75;
     private final double lowLoadThreshold = 0.75;
     private long lastOptimizeTime = System.currentTimeMillis();
@@ -77,7 +77,7 @@ public class WorkerOptimizer implements Shutdownable {
                 lowLoadRecords.remove();
             }
             if (current > lastOptimizeTime + optimizeTimeInterval) {
-                int totalRecords = highLoadRecords.size() + midLoadRecords.size() + lowLoadRecords.size();
+                int totalRecords = Math.max(0, highLoadRecords.size() + midLoadRecords.size() + lowLoadRecords.size());
                 if (highLoadRecords.size() > highLoadThreshold * totalRecords) {
                     optimize(1);
                     highLoadRecords.clear();

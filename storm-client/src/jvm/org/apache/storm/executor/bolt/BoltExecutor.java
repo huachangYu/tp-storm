@@ -242,7 +242,7 @@ public class BoltExecutor extends Executor {
         if (this.useThreadPool) {
             this.boltExecutorPool = boltExecutorPool;
             this.threadPoolStrategy = (String) topoConf.getOrDefault(Config.BOLT_EXECUTOR_POOL_STRATEGY,
-                    StrategyType.Fair.name());
+                    StrategyType.AD.name());
         }
     }
 

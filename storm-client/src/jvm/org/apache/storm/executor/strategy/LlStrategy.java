@@ -31,12 +31,12 @@ public class LlStrategy  extends ScheduleStrategy {
         if (threadsNum > 1) {
             startIndex = RAND.nextInt(threadsNum);
         }
-        TaskQueue taskQueue = taskQueues.get(startIndex);
+        TaskQueue taskQueue = notEmptyQueue.get(startIndex);
         for (int i = 0; i < threadsNum; i++) {
             if (i == startIndex) {
                 continue;
             }
-            TaskQueue tmpTaskQueue = taskQueues.get(i);
+            TaskQueue tmpTaskQueue = notEmptyQueue.get(i);
             if (compare(taskQueue, tmpTaskQueue) < 0) {
                 taskQueue = tmpTaskQueue;
             }

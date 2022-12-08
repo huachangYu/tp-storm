@@ -33,7 +33,7 @@ public abstract class ScheduleStrategy implements IScheduleStrategy {
             List<TaskQueue> notEmptyTaskQueues = taskQueues.stream()
                     .filter(t -> t.getQueue().size() > 0)
                     .collect(Collectors.toList());
-            while (taskQueues.isEmpty()) {
+            while (notEmptyTaskQueues.isEmpty()) {
                 blockedConsumerNum.getAndIncrement();
                 emptyQueueWait.await();
                 blockedConsumerNum.getAndDecrement();

@@ -23,6 +23,6 @@ public class RandomStrategy extends ScheduleStrategy {
         if (threadsNum > 1) {
             startIndex = RAND.nextInt(threadsNum);
         }
-        return taskQueues.get(startIndex);
+        return notEmptyQueue.get(startIndex);
     }
 }

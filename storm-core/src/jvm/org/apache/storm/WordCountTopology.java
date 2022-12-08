@@ -111,7 +111,7 @@ public class WordCountTopology {
         conf.useExecutorPool(true);
         conf.setExecutorPoolCoreConsumers(1);
         conf.setExecutorPoolMaxConsumers(4);
-        conf.setExecutorPoolStrategy("ROUND_ROBIN");
+        conf.setExecutorPoolStrategy("AD");
         conf.setExecutorPoolTotalQueueCapacity(2000000);
         conf.enableWorkersOptimize(true);
         conf.enableExecutorPoolOptimize(true);

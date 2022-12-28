@@ -1,9 +1,11 @@
 # TP-Storm
 
-# What's New
-The TP-Storm is based on [Apache Storm v2.4.0](https://storm.apache.org/)
+# what is new
+The TP-Storm is based on [Apache Storm v2.4.0](https://storm.apache.org/). New features are as follows:
 - Better performance
 - Automatically adjust parameters according to system status
+# Implementation details
+todo
 # How to Use
 WordCount topology is as follows:
 ```java

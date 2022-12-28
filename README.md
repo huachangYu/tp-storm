@@ -1,8 +1,8 @@
 # TP-Storm
-
-# what is new
+TP-Storm is a distributed stream computing engine based on an adaptive operator scheduling mechanism. It is implemented on the basis of [Apache Storm v2.4.0](https://github.com/apache/storm/tree/v2.4.0).
+# What is New
 The TP-Storm is based on [Apache Storm v2.4.0](https://storm.apache.org/). New features are as follows:
-- Better performance
+- Better performance，lower latency，higher throughput
 - Automatically adjust parameters according to system status
 # Implementation details
 todo
@@ -18,7 +18,7 @@ public static void main(String[] args) throws Exception {
       Config conf = new Config();
       conf.useExecutorPool(true);
       conf.setExecutorPoolCoreConsumers(1);
-      conf.setExecutorPoolMaxConsumers(4);
+      conf.setExecutorPoolMaxConsumers(8);
       conf.setExecutorPoolStrategy("AD");
       conf.setExecutorPoolTotalQueueCapacity(2000000);
       conf.enableWorkersOptimize(true);
